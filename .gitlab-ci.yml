@@ -1,0 +1,52 @@
+# GitLab CI/CD（课程要求：仓库内附带 pipeline；依赖走国内镜像；默认分支/MR 构建）
+# 若组内 Runner 打了 tag，在下方 job 中取消注释 tags 并填写实际 tag
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+stages:
+  - verify
+  # 有部署环境时再取消注释 stages: [ verify, deploy ]
+  # - deploy
+
+variables:
+  NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
+
+default:
+  image: node:20-alpine
+  interruptible: true
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+    policy: pull-push
+
+# 安装依赖 + 静态检查 + 类型检查 + Next 生产构建（与本地 `npm run build` 一致）
+lint_typecheck_build:
+  stage: verify
+  # 若学校 Runner 要求指定 tag，例如 school-docker：
+  # tags:
+  #   - school-docker
+  script:
+    - npm install
+    - npm run lint
+    - npm run typecheck
+    - npm run build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# 可选：合并到默认分支后自动/手动部署（需自行配置服务器与 SSH/密钥变量，勿把密钥写入仓库）
+# deploy_preview:
+#   stage: deploy
+#   needs: ["lint_typecheck_build"]
+#   script:
+#     - echo "在此处写 rsync / docker push / kubectl apply 等"
+#   environment:
+#     name: preview
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: manual
