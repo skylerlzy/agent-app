@@ -43,30 +43,33 @@ export function DemoClient() {
       if (!res.ok) throw new Error(data.error ?? "请求失败");
       setEvents(data.events ?? []);
     } catch (e) {
-      console.error(e);
-      alert(String(e));
+      console.error("Agent 运行失败：", e);
+      alert(`运行失败：\n${String(e)}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "1rem" }}>
       <button
         type="button"
         onClick={run}
         disabled={loading}
         style={{
-          padding: "0.5rem 1rem",
+          padding: "0.6rem 1.2rem",
           marginBottom: "1rem",
-          background: "var(--accent)",
+          backgroundColor: "#38bdf8",
+          color: "#0f172a",
           border: "none",
           borderRadius: 8,
           fontWeight: 600,
           cursor: loading ? "wait" : "pointer",
+          transition: "opacity 0.2s",
+          opacity: loading ? 0.7 : 1,
         }}
       >
-        {loading ? "运行中…" : "运行示例 Agent"}
+        {loading ? "🚀 运行中…" : "▶️ 运行示例 Agent"}
       </button>
       <TracePanel events={events} />
     </div>
