@@ -14,10 +14,19 @@ stages:
 
 variables:
   NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
+  NEXT_TELEMETRY_DISABLED: "1"
+  # 浅克隆，加快拉代码（按需可改为更大深度）
+  GIT_DEPTH: "50"
 
 default:
-  image: node:20-alpine
+  # 勿用 docker.io/library/node：校园网/国内常连不上 registry-1.docker.io。
+  # AWS Public ECR 同步官方 library 镜像，与 node:20-alpine 等价。
+  image: public.ecr.aws/docker/library/node:20-alpine
   interruptible: true
+  # 显式进入仓库根目录：避免 Windows shell 执行器在 Runner 安装目录执行导致找不到 package.json
+  # （Docker 执行器下一般已在 CI_PROJECT_DIR，多写一次无害）
+  before_script:
+    - cd "${CI_PROJECT_DIR}"
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
@@ -27,11 +36,14 @@ default:
 # 安装依赖 + 静态检查 + 类型检查 + Next 生产构建（与本地 `npm run build` 一致）
 lint_typecheck_build:
   stage: verify
+  # 超时避免任务无限「运行中」占用队列；可按 Runner 性能调大（单位分钟）
+  timeout: 45m
   # 若学校 Runner 要求指定 tag，例如 school-docker：
   # tags:
   #   - school-docker
   script:
-    - npm install
+    # 有 package-lock 时用 ci 更快、更可复现（与本地 lock 一致）
+    - npm ci
     - npm run lint
     - npm run typecheck
     - npm run build
