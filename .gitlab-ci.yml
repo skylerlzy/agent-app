@@ -1,4 +1,6 @@
-# GitLab CI/CD
+# GitLab CI/CD（课程要求：仓库内附带 pipeline；依赖走国内镜像；默认分支/MR 构建）
+# 若组内 Runner 打了 tag，在下方 job 中取消注释 tags 并填写实际 tag
+
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -7,36 +9,56 @@ workflow:
 
 stages:
   - verify
+  # 有部署环境时再取消注释 stages: [ verify, deploy ]
+  # - deploy
 
 variables:
   NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
   NEXT_TELEMETRY_DISABLED: "1"
-  CI: "true"
-  NPM_CONFIG_PROGRESS: "false"
-  NPM_CONFIG_FETCH_RETRIES: "2"
-  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
-  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
+  # 浅克隆，加快拉代码（按需可改为更大深度）
   GIT_DEPTH: "50"
 
 default:
-  image: public.ecr.aws/docker/library/node:20-bookworm-slim
+  # 勿用 docker.io/library/node：校园网/国内常连不上 registry-1.docker.io。
+  # AWS Public ECR 同步官方 library 镜像，与 node:20-alpine 等价。
+  image: public.ecr.aws/docker/library/node:20-alpine
   interruptible: true
+  # 显式进入仓库根目录：避免 Windows shell 执行器在 Runner 安装目录执行导致找不到 package.json
+  # （Docker 执行器下一般已在 CI_PROJECT_DIR，多写一次无害）
   before_script:
     - cd "${CI_PROJECT_DIR}"
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+    policy: pull-push
 
-lint_typecheck:
+# 安装依赖 + 静态检查 + 类型检查 + Next 生产构建（与本地 `npm run build` 一致）
+lint_typecheck_build:
   stage: verify
-  cache: []
-  timeout: 20m
+  # 超时避免任务无限「运行中」占用队列；可按 Runner 性能调大（单位分钟）
+  timeout: 45m
+  # 若学校 Runner 要求指定 tag，例如 school-docker：
+  # tags:
+  #   - school-docker
   script:
-    - set -eux
-    - echo "[CI] start $(date -Iseconds)"
-    - node -v
-    - npm -v
-    - timeout 8m npm ci --include=dev --no-audit --no-fund
-    - timeout 5m npm run lint:ci
-    - timeout 5m npm run typecheck
-    - echo "[CI] done $(date -Iseconds)"
+    # 有 package-lock 时用 ci 更快、更可复现（与本地 lock 一致）
+    - npm ci
+    - npm run lint
+    - npm run typecheck
+    - npm run build
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# 可选：合并到默认分支后自动/手动部署（需自行配置服务器与 SSH/密钥变量，勿把密钥写入仓库）
+# deploy_preview:
+#   stage: deploy
+#   needs: ["lint_typecheck_build"]
+#   script:
+#     - echo "在此处写 rsync / docker push / kubectl apply 等"
+#   environment:
+#     name: preview
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: manual
