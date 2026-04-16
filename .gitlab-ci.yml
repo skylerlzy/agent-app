@@ -20,8 +20,9 @@ variables:
 
 default:
   # 勿用 docker.io/library/node：校园网/国内常连不上 registry-1.docker.io。
-  # AWS Public ECR 同步官方 library 镜像，与 node:20-alpine 等价。
-  image: public.ecr.aws/docker/library/node:20-alpine
+  # AWS Public ECR 同步官方 library 镜像。
+  # 勿用 alpine：Next.js SWC 为原生二进制，musl 环境易「构建极慢/卡住」；改用 bookworm-slim（glibc）。
+  image: public.ecr.aws/docker/library/node:20-bookworm-slim
   interruptible: true
   # 显式进入仓库根目录：避免 Windows shell 执行器在 Runner 安装目录执行导致找不到 package.json
   # （Docker 执行器下一般已在 CI_PROJECT_DIR，多写一次无害）
@@ -42,8 +43,9 @@ lint_typecheck_build:
   # tags:
   #   - school-docker
   script:
+    - set -eux
     # 有 package-lock 时用 ci 更快、更可复现（与本地 lock 一致）
-    - npm ci
+    - npm ci --no-audit --no-fund
     - npm run lint
     - npm run typecheck
     - npm run build
