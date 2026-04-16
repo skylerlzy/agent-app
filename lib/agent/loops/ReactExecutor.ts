@@ -13,6 +13,7 @@ import type {
   UserContext,
   UserGoal,
 } from "../contracts";
+import { FAILED_TURN_PREFIX } from "../reflexion/ReflexionPolicy";
 
 function stubToolArgs(tool: ToolName, input: Pick<AgentRunInput, "goal" | "context">): ToolArguments {
   const dest = (input.goal.slots?.destination ?? "杭州").split(/[,，]/)[0].trim();
@@ -73,53 +74,94 @@ export class ReactExecutor implements IReactExecutor {
 
       const parsed = def.argsSchema.safeParse(args);
       if (!parsed.success) {
+        const schemaError = {
+          code: "SCHEMA",
+          message: parsed.error.message,
+          retryable: false as const,
+        };
         yield emitter.emit({
           type: "tool_error",
-          payload: {
-            stepId: step.id,
-            toolName: primaryTool,
-            error: { code: "SCHEMA", message: parsed.error.message, retryable: false },
-          },
+          payload: { stepId: step.id, toolName: primaryTool, error: schemaError },
         });
-        return;
-      }
-
-      yield emitter.emit({
-        type: "tool_call",
-        payload: { stepId: step.id, toolName: primaryTool, args: parsed.data as Record<string, unknown> },
-      });
-
-      const result = await def.execute(parsed.data, {
-        userId: context.userId,
-        stepId: step.id,
-        userContext: context,
-      });
-
-      if (result.ok) {
-        const summary = JSON.stringify(result.data).slice(0, 500);
-        history.push({ ...thought, toolResultSummary: summary });
-        yield emitter.emit({
-          type: "tool_result",
-          payload: { stepId: step.id, toolName: primaryTool, summary },
+        history.push({
+          ...thought,
+          toolResultSummary: `${FAILED_TURN_PREFIX}${schemaError.code}:${schemaError.message}`,
         });
-        done = true;
-      } else {
-        yield emitter.emit({
-          type: "tool_error",
-          payload: { stepId: step.id, toolName: primaryTool, error: result.error },
+        const schemaDecision = await this.reflexion.decide({
+          step,
+          error: schemaError,
+          lastArgs: args,
+          history,
         });
-        const decision = await this.reflexion.decide({ step, error: result.error, lastArgs: args, history });
         yield emitter.emit({
           type: "reflexion",
-          payload: { stepId: step.id, diagnosis: decision.diagnosis, nextAction: decision.nextAction },
+          payload: {
+            stepId: step.id,
+            diagnosis: schemaDecision.diagnosis,
+            nextAction: schemaDecision.nextAction,
+          },
         });
-        if (decision.nextAction === "retry" && decision.patchedArgs) {
-          args = decision.patchedArgs;
+        if (schemaDecision.nextAction === "retry") {
+          args = schemaDecision.patchedArgs ?? args;
           turn++;
           continue;
         }
-        if (decision.nextAction === "abort") return;
+        if (schemaDecision.nextAction === "abort") {
+          yield emitter.emit({
+            type: "run_error",
+            payload: { message: schemaDecision.diagnosis },
+          });
+          return;
+        }
         done = true;
+      } else {
+        yield emitter.emit({
+          type: "tool_call",
+          payload: { stepId: step.id, toolName: primaryTool, args: parsed.data as Record<string, unknown> },
+        });
+
+        const result = await def.execute(parsed.data, {
+          userId: context.userId,
+          stepId: step.id,
+          userContext: context,
+        });
+
+        if (result.ok) {
+          const summary = JSON.stringify(result.data).slice(0, 500);
+          history.push({ ...thought, toolResultSummary: summary });
+          yield emitter.emit({
+            type: "tool_result",
+            payload: { stepId: step.id, toolName: primaryTool, summary },
+          });
+          done = true;
+        } else {
+          yield emitter.emit({
+            type: "tool_error",
+            payload: { stepId: step.id, toolName: primaryTool, error: result.error },
+          });
+          history.push({
+            ...thought,
+            toolResultSummary: `${FAILED_TURN_PREFIX}${result.error.code}:${result.error.message}`,
+          });
+          const decision = await this.reflexion.decide({ step, error: result.error, lastArgs: args, history });
+          yield emitter.emit({
+            type: "reflexion",
+            payload: { stepId: step.id, diagnosis: decision.diagnosis, nextAction: decision.nextAction },
+          });
+          if (decision.nextAction === "retry") {
+            args = decision.patchedArgs ?? args;
+            turn++;
+            continue;
+          }
+          if (decision.nextAction === "abort") {
+            yield emitter.emit({
+              type: "run_error",
+              payload: { message: decision.diagnosis },
+            });
+            return;
+          }
+          done = true;
+        }
       }
       turn++;
     }

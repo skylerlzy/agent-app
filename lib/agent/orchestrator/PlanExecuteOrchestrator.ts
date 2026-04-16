@@ -46,6 +46,7 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     await push(ev2);
 
     for (const step of flattenSteps(plan)) {
+      let stopped = false;
       for await (const ev of this.reactExecutor.executeStep({
         sessionId: input.sessionId,
         emitter,
@@ -56,7 +57,12 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
       })) {
         yield ev;
         await push(ev);
+        if (ev.type === "run_error") {
+          stopped = true;
+          break;
+        }
       }
+      if (stopped) return;
     }
 
     const summary = `自治运行结束：共执行 ${flattenSteps(plan).length} 步（框架占位文案）。`;
