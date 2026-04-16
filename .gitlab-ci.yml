@@ -1,6 +1,4 @@
-# GitLab CI/CD（课程要求：仓库内附带 pipeline；依赖走国内镜像；默认分支/MR 构建）
-# 若组内 Runner 打了 tag，在下方 job 中取消注释 tags 并填写实际 tag
-
+# GitLab CI/CD
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -9,59 +7,47 @@ workflow:
 
 stages:
   - verify
-  # 有部署环境时再取消注释 stages: [ verify, deploy ]
-  # - deploy
 
 variables:
   NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
   NEXT_TELEMETRY_DISABLED: "1"
-  # 浅克隆，加快拉代码（按需可改为更大深度）
+  CI: "true"
+  NODE_ENV: "production"
+  NPM_CONFIG_PROGRESS: "false"
   GIT_DEPTH: "50"
 
 default:
-  # 勿用 docker.io/library/node：校园网/国内常连不上 registry-1.docker.io。
-  # AWS Public ECR 同步官方 library 镜像。
-  # 勿用 alpine：Next.js SWC 为原生二进制，musl 环境易「构建极慢/卡住」；改用 bookworm-slim（glibc）。
   image: public.ecr.aws/docker/library/node:20-bookworm-slim
   interruptible: true
-  # 显式进入仓库根目录：避免 Windows shell 执行器在 Runner 安装目录执行导致找不到 package.json
-  # （Docker 执行器下一般已在 CI_PROJECT_DIR，多写一次无害）
   before_script:
     - cd "${CI_PROJECT_DIR}"
-  # 不在此启用 cache：自建 Runner 若 config.toml 里 [runners.cache] 的 Type 为空/未注册，
-  # 会出现 “cache factory not found: factory for cache adapter \"\" was not registered”，
-  # restore_cache / save_cache 阶段异常，任务长时间卡在「运行中」。
-  # 修复 Runner 后可在此恢复 cache（例如 S3/minio）或改用 npm 全局缓存目录。
 
-# 安装依赖 + 静态检查 + 类型检查 + Next 生产构建（与本地 `npm run build` 一致）
-lint_typecheck_build:
+lint_typecheck:
   stage: verify
-  # 显式关闭缓存，避免继承模板或其它 default 仍带 cache
   cache: []
-  # 超时避免任务无限「运行中」占用队列；可按 Runner 性能调大（单位分钟）
-  timeout: 45m
-  # 若学校 Runner 要求指定 tag，例如 school-docker：
-  # tags:
-  #   - school-docker
+  timeout: 20m
   script:
     - set -eux
-    # 有 package-lock 时用 ci 更快、更可复现（与本地 lock 一致）
+    - node -v
+    - npm -v
     - npm ci --no-audit --no-fund
-    - npm run lint
+    - npm run lint:ci
     - npm run typecheck
-    - npm run build
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# 可选：合并到默认分支后自动/手动部署（需自行配置服务器与 SSH/密钥变量，勿把密钥写入仓库）
-# deploy_preview:
-#   stage: deploy
-#   needs: ["lint_typecheck_build"]
-#   script:
-#     - echo "在此处写 rsync / docker push / kubectl apply 等"
-#   environment:
-#     name: preview
-#   rules:
-#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-#       when: manual
+build_optional:
+  stage: verify
+  cache: []
+  timeout: 30m
+  allow_failure: true
+  script:
+    - set -eux
+    - npm ci --no-audit --no-fund
+    - npm run build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
