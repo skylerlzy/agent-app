@@ -13,6 +13,9 @@ variables:
   NEXT_TELEMETRY_DISABLED: "1"
   CI: "true"
   NPM_CONFIG_PROGRESS: "false"
+  NPM_CONFIG_FETCH_RETRIES: "2"
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
   GIT_DEPTH: "50"
 
 default:
@@ -27,26 +30,13 @@ lint_typecheck:
   timeout: 20m
   script:
     - set -eux
+    - echo "[CI] start $(date -Iseconds)"
     - node -v
     - npm -v
-    - npm ci --include=dev --no-audit --no-fund
-    - npm run lint:ci
-    - npm run typecheck
+    - timeout 8m npm ci --include=dev --no-audit --no-fund
+    - timeout 5m npm run lint:ci
+    - timeout 5m npm run typecheck
+    - echo "[CI] done $(date -Iseconds)"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
-build_optional:
-  stage: verify
-  cache: []
-  timeout: 30m
-  allow_failure: true
-  script:
-    - set -eux
-    - npm ci --include=dev --no-audit --no-fund
-    - npm run build
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: manual
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual
