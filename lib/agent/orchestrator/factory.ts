@@ -1,15 +1,34 @@
-import type { IAutonomousAgent, IReflexionPolicy, ITraceSink } from "../contracts";
-import { StubPlanGenerator } from "../plan/StubPlanGenerator";
-import { ReactExecutor } from "../loops/ReactExecutor";
-import { LLMReflexionPolicy } from "../reflexion/LLMReflexionPolicy";
-import { ReflexionPolicy } from "../reflexion/ReflexionPolicy";
+import type {
+  IAutonomousAgent,
+  IPlanGenerator,
+  IReactExecutor,
+  IReflexionPolicy,
+  IToolRegistry,
+  ITraceSink,
+} from "../contracts";
 import { MockLLMClient } from "../llm/MockLLMClient";
 import { OpenAICompatibleClient } from "../llm/OpenAICompatibleClient";
+import { ReactExecutor } from "../loops/ReactExecutor";
+import { StubPlanGenerator } from "../plan/StubPlanGenerator";
+import { LLMReflexionPolicy } from "../reflexion/LLMReflexionPolicy";
+import { ReflexionPolicy } from "../reflexion/ReflexionPolicy";
 import { createStubToolRegistry } from "../tools/factory";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
 import {LLMPlanGenerator} from "@/lib/agent/plan/LLMPlanGenerator";
 
-/** 与成员2 的 LLM 对接：开启 USE_LLM_REFLEXION 时用模型生成反思，失败则回退规则策略 */
+export interface AutonomousAgentPipelineOptions {
+  planGenerator?: IPlanGenerator;
+  reactExecutor?: IReactExecutor;
+  reflexionPolicy?: IReflexionPolicy;
+  toolRegistry?: IToolRegistry;
+  traceSink?: ITraceSink;
+  maxReactTurns?: number;
+}
+
+function isTraceSink(value: ITraceSink | AutonomousAgentPipelineOptions): value is ITraceSink {
+  return "emit" in value && !("traceSink" in value);
+}
+
 export function createReflexionPolicy(): IReflexionPolicy {
   const rules = new ReflexionPolicy();
   if (process.env.USE_LLM_REFLEXION === "true") {
