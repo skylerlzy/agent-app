@@ -7,6 +7,7 @@ import { MockLLMClient } from "../llm/MockLLMClient";
 import { OpenAICompatibleClient } from "../llm/OpenAICompatibleClient";
 import { createStubToolRegistry } from "../tools/factory";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
+import {LLMPlanGenerator} from "@/lib/agent/plan/LLMPlanGenerator";
 
 /** 与成员2 的 LLM 对接：开启 USE_LLM_REFLEXION 时用模型生成反思，失败则回退规则策略 */
 export function createReflexionPolicy(): IReflexionPolicy {
@@ -21,8 +22,9 @@ export function createReflexionPolicy(): IReflexionPolicy {
 /** 组装自治 Agent 流水线（工具为占位实现，可替换） */
 export function createAutonomousAgentPipeline(traceSink?: ITraceSink): IAutonomousAgent {
   const registry = createStubToolRegistry();
-  const planGen = new StubPlanGenerator();
+  const llmClient = new OpenAICompatibleClient();
+  const planGenerator = new LLMPlanGenerator(llmClient);
   const reflexion = createReflexionPolicy();
-  const react = new ReactExecutor(registry, reflexion);
-  return new PlanExecuteOrchestrator(planGen, react, traceSink);
+  const react = new ReactExecutor(llmClient,registry, reflexion);
+  return new PlanExecuteOrchestrator(planGenerator, react, traceSink);
 }
