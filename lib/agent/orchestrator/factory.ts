@@ -14,6 +14,7 @@ import { LLMReflexionPolicy } from "../reflexion/LLMReflexionPolicy";
 import { ReflexionPolicy } from "../reflexion/ReflexionPolicy";
 import { createStubToolRegistry } from "../tools/factory";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
+import {LLMPlanGenerator} from "@/lib/agent/plan/LLMPlanGenerator";
 
 export interface AutonomousAgentPipelineOptions {
   planGenerator?: IPlanGenerator;
@@ -37,15 +38,12 @@ export function createReflexionPolicy(): IReflexionPolicy {
   return rules;
 }
 
-export function createAutonomousAgentPipeline(
-  input?: ITraceSink | AutonomousAgentPipelineOptions
-): IAutonomousAgent {
-  const options = input ? (isTraceSink(input) ? { traceSink: input } : input) : {};
-  const registry = options.toolRegistry ?? createStubToolRegistry();
-  const planGenerator = options.planGenerator ?? new StubPlanGenerator();
-  const reflexion = options.reflexionPolicy ?? createReflexionPolicy();
-  const reactExecutor =
-    options.reactExecutor ?? new ReactExecutor(registry, reflexion, options.maxReactTurns);
-
-  return new PlanExecuteOrchestrator(planGenerator, reactExecutor, options.traceSink);
+/** 组装自治 Agent 流水线（工具为占位实现，可替换） */
+export function createAutonomousAgentPipeline(traceSink?: ITraceSink): IAutonomousAgent {
+  const registry = createStubToolRegistry();
+  const llmClient = new OpenAICompatibleClient();
+  const planGenerator = new LLMPlanGenerator(llmClient);
+  const reflexion = createReflexionPolicy();
+  const react = new ReactExecutor(llmClient,registry, reflexion);
+  return new PlanExecuteOrchestrator(planGenerator, react, traceSink);
 }
