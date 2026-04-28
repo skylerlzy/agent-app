@@ -130,10 +130,15 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
         };
       }
 
-      // 关键字查询（可升级为坐标）
-      const url = `https://restapi.amap.com/v3/direction/driving?origin=${encodeURIComponent(
-          args.origin
-      )}&destination=${encodeURIComponent(args.destination)}&key=${key}`;
+      const apiByMode = {
+        driving: "driving",
+        walking: "walking",
+        transit: "transit/integrated",
+      } as const;
+      const modePath = apiByMode[args.mode];
+      const url = `https://restapi.amap.com/v3/direction/${modePath}?origin=${encodeURIComponent(
+        args.origin
+      )}&destination=${encodeURIComponent(args.destination)}&city=${encodeURIComponent(args.origin)}&key=${key}`;
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -154,6 +159,7 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
       return {
         ok: true,
         data: {
+          mode: args.mode,
           distance: route?.distance,
           duration: route?.duration,
         },

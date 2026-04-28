@@ -5,8 +5,18 @@ export class OpenAICompatibleClient implements ILLMClient {
   private baseURL = process.env.LLM_API_BASE_URL || process.env.DASHSCOPE_BASE_URL;
   private model = process.env.LLM_MODEL || process.env.QWEN_MODEL || "qwen-turbo";
 
+  private get endpoint() {
+    if (!this.baseURL) {
+      throw new Error("Missing LLM API base URL. Please set LLM_API_BASE_URL or DASHSCOPE_BASE_URL.");
+    }
+    if (!this.apiKey) {
+      throw new Error("Missing LLM API key. Please set LLM_API_KEY or DASHSCOPE_API_KEY.");
+    }
+    return `${this.baseURL}/chat/completions`;
+  }
+
   async complete(messages: ChatMessage[], options?: { temperature?: number }): Promise<string> {
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    const response = await fetch(this.endpoint, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${this.apiKey}`,
@@ -46,7 +56,7 @@ export class OpenAICompatibleClient implements ILLMClient {
       }
     }));
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
+    const response = await fetch(this.endpoint, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${this.apiKey}`,
@@ -59,6 +69,11 @@ export class OpenAICompatibleClient implements ILLMClient {
         tool_choice: "auto",
       }),
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`LLM API Error: ${error.error?.message || response.statusText}`);
+    }
 
     const data = await response.json();
     const message = data.choices[0].message;

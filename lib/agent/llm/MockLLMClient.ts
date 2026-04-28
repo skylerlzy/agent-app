@@ -5,4 +5,8 @@ export class MockLLMClient implements ILLMClient {
   async complete(messages: ChatMessage[]): Promise<string> {
     return `[mock-llm] ${messages.at(-1)?.content ?? ""}`;
   }
+
+  async completeWithTools(): Promise<{ content: string | null; toolCalls?: { name: string; arguments: string }[] }> {
+    return { content: "mock 模式下未启用工具调用", toolCalls: [] };
+  }
 }
