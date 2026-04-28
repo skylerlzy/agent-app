@@ -61,22 +61,31 @@ export async function POST(req: Request) {
 
   const input = parsed.data as AgentRunInput;
   const pipeline = createAutonomousAgentPipeline();
-  const events: ReasoningEvent[] = [];
 
-  try {
-    for await (const event of pipeline.run(input)) {
-      events.push(event);
-    }
-    return NextResponse.json({ events });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      {
-        error: "Agent pipeline failed before it could emit a run_error event.",
-        detail: errorMessage(error),
-        events,
-      },
-      { status: 500 }
-    );
-  }
+  // 使用 Server-Sent Events (SSE) 来实时推送 events
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of pipeline.run(input)) {
+          const data = `data: ${JSON.stringify(event)}\n\n`;
+          controller.enqueue(new TextEncoder().encode(data));
+        }
+        controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (error) {
+        console.error(error);
+        const errorData = `data: ${JSON.stringify({ type: "error", message: errorMessage(error) })}\n\n`;
+        controller.enqueue(new TextEncoder().encode(errorData));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
 }

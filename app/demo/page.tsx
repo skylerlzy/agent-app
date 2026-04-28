@@ -5,17 +5,17 @@ export default function DemoPage() {
     <main 
       style={{ 
         padding: "2rem", 
-        maxWidth: "1000px", 
+        maxWidth: "1400px", 
         margin: "0 auto",
         fontFamily: "system-ui, sans-serif"
       }}
     >
       <h1 style={{ 
-        fontSize: "1.5rem", 
+        fontSize: "2rem", 
         marginBottom: "0.5rem",
         color: "#f1f5f9"
       }}>
-        🤖 Agent 内部状态轨迹
+        🤖 Agent 交互演示
       </h1>
       
       <p style={{ 
@@ -23,7 +23,7 @@ export default function DemoPage() {
         marginBottom: "1.5rem",
         lineHeight: 1.5
       }}>
-        展示 session_start → plan → ReAct（thought / tool_call / tool_result / reflexion）→ run_done。
+        输入您的需求，运行Agent，实时查看内部状态轨迹（session_start → plan → ReAct → run_done）。
       </p>
       
       <DemoClient />
