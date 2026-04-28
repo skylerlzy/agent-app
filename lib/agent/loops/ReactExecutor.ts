@@ -1,5 +1,4 @@
 import type {
-  AgentRunInput,
   ExecutionPlan,
   IEventEmitter,
   IReactExecutor,
@@ -16,6 +15,47 @@ import type {
   ChatMessage,
 } from "../contracts";
 import { FAILED_TURN_PREFIX } from "../reflexion/ReflexionPolicy";
+
+function zodLikeToJsonSchema(schema: unknown): object {
+  const fallback = { type: "object", additionalProperties: true };
+  if (!schema || typeof schema !== "object" || !("_def" in schema)) return fallback;
+
+  const def = (schema as { _def?: { typeName?: string; shape?: () => Record<string, unknown>; values?: string[]; innerType?: unknown } })._def;
+  if (!def?.typeName) return fallback;
+
+  if (def.typeName === "ZodObject" && typeof def.shape === "function") {
+    const shape = def.shape();
+    const properties: Record<string, object> = {};
+    const required: string[] = [];
+
+    for (const [key, value] of Object.entries(shape)) {
+      const valueDef = (value as { _def?: { typeName?: string; values?: string[]; innerType?: unknown } })._def;
+      const isOptional = valueDef?.typeName === "ZodOptional";
+      const innerDef = isOptional
+        ? ((valueDef?.innerType as { _def?: { typeName?: string; values?: string[] } } | undefined)?._def)
+        : valueDef;
+
+      switch (innerDef?.typeName) {
+        case "ZodString":
+          properties[key] = { type: "string" };
+          break;
+        case "ZodNumber":
+          properties[key] = { type: "number" };
+          break;
+        case "ZodEnum":
+          properties[key] = { type: "string", enum: innerDef.values ?? [] };
+          break;
+        default:
+          properties[key] = { type: "string" };
+      }
+      if (!isOptional) required.push(key);
+    }
+
+    return { type: "object", properties, required, additionalProperties: false };
+  }
+
+  return fallback;
+}
 
 /**
  * 成员2实现：自治 ReAct 执行器
@@ -64,15 +104,17 @@ export class ReactExecutor implements IReactExecutor {
       // 2. 获取当前步骤建议的工具定义
       const availableTools = (step.suggestedTools || [])
         .map((name) => this.registry.get(name))
-        .filter((t): t is any => !!t)
+        .filter((t): t is NonNullable<typeof t> => !!t)
         .map((t) => ({
           name: t.name,
           description: t.description,
-          parameters: t.argsSchema,
+          parameters: zodLikeToJsonSchema(t.argsSchema),
         }));
 
       // 3. 核心决策：询问 LLM 下一步该做什么
-      const llmResponse = await this.llmClient.completeWithTools!(messages, availableTools);
+      const llmResponse = this.llmClient.completeWithTools
+        ? await this.llmClient.completeWithTools(messages, availableTools)
+        : { content: await this.llmClient.complete(messages), toolCalls: [] };
 
       const thoughtText = llmResponse.content || "正在分析当前状况...";
       const toolCall = llmResponse.toolCalls?.[0];
@@ -123,11 +165,19 @@ export class ReactExecutor implements IReactExecutor {
         yield emitter.emit({ type: "reflexion", payload: { stepId: step.id, diagnosis: decision.diagnosis, nextAction: decision.nextAction } });
 
         if (decision.nextAction === "retry") {
-            // 将错误反馈给模型，让其在下一轮修正参数
-            messages.push({ role: "assistant", content: thoughtText });
-            messages.push({ role: "user", content: `参数格式错误: ${schemaError.message}。请根据诊断修订参数后重试: ${decision.diagnosis}` });
-            turn++;
-            continue;
+          history.push({
+            ...currentTurn,
+            toolResultSummary: `${FAILED_TURN_PREFIX}${schemaError.code}:${schemaError.message}`,
+          });
+          // 将错误反馈给模型，让其在下一轮修正参数
+          messages.push({ role: "assistant", content: thoughtText });
+          const patchedArgsText = decision.patchedArgs ? JSON.stringify(decision.patchedArgs) : "{}";
+          messages.push({
+            role: "user",
+            content: `参数格式错误: ${schemaError.message}。请根据诊断修订参数后重试: ${decision.diagnosis}。建议参数: ${patchedArgsText}`,
+          });
+          turn++;
+          continue;
         }
         done = true;
       } else {
@@ -162,7 +212,15 @@ export class ReactExecutor implements IReactExecutor {
           yield emitter.emit({ type: "reflexion", payload: { stepId: step.id, diagnosis: decision.diagnosis, nextAction: decision.nextAction } });
 
           if (decision.nextAction === "retry") {
-            messages.push({ role: "user", content: `工具执行报错: ${result.error.message}。诊断建议: ${decision.diagnosis}。请重试。` });
+            history.push({
+              ...currentTurn,
+              toolResultSummary: `${FAILED_TURN_PREFIX}${result.error.code}:${result.error.message}`,
+            });
+            const patchedArgsText = decision.patchedArgs ? JSON.stringify(decision.patchedArgs) : "{}";
+            messages.push({
+              role: "user",
+              content: `工具执行报错: ${result.error.message}。诊断建议: ${decision.diagnosis}。请重试并参考参数: ${patchedArgsText}`,
+            });
             turn++;
             continue;
           }

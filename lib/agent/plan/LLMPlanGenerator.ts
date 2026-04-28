@@ -90,7 +90,11 @@ export class LLMPlanGenerator implements IPlanGenerator {
         { role: "user", content: userPrompt }
       ]);
       const cleanJson = response.replace(/```json/g, "").replace(/```/g, "").trim();
-      return JSON.parse(cleanJson);
+      const revised = JSON.parse(cleanJson) as Partial<ExecutionPlan>;
+      return {
+        planId: revised.planId ?? plan.planId,
+        phases: Array.isArray(revised.phases) ? revised.phases : plan.phases,
+      };
     } catch (e) {
       return plan; // 修订失败则返回原计划
     }
