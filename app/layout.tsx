@@ -1,15 +1,53 @@
 import type { Metadata } from "next";
+import { DM_Sans, Cormorant_Garamond } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 
+const fontSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+/** 首页品牌大字：拉丁字形优雅，中文回退仍由 sans 承担 */
+const fontDisplay = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-display",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "智能出行与日程协调 Agent",
-  description: "迭代二任务一 — Plan-and-Execute + ReAct + Reflexion",
+  title: "VoyageMind — 您的私人出行助手",
+  description: "智能出行规划与推理轨迹 · Convex · Clerk",
+  icons: {
+    icon: [{ url: "/icon", type: "image/png" }],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
-      <body>{children}</body>
+    <html lang="zh-CN" suppressHydrationWarning className={`${fontSans.variable} ${fontDisplay.variable}`}>
+      <body className="font-sans">
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_0%_0%,hsl(168_42%_92%/0.85),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_100%_10%,hsl(175_35%_90%/0.55),transparent_50%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_45%_at_50%_100%,hsl(160_30%_91%/0.45),transparent_48%)]" />
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23475569' stroke-opacity='0.2'%3E%3Cpath d='M0 40h80M40 0v80'/%3E%3C/g%3E%3C/svg%3E")`,
+            }}
+            aria-hidden
+          />
+          <div
+            className="absolute inset-0 animate-gradient-flow bg-gradient-to-br from-[hsl(168_35%_96%)] via-[hsl(172_28%_95%)] to-[hsl(165_32%_94%)] bg-[length:200%_200%] opacity-95"
+            aria-hidden
+          />
+        </div>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

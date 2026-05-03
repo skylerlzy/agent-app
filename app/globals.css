@@ -1,16 +1,35 @@
-:root {
-  --bg: #0f172a;
-  --fg: #e2e8f0;
-  --accent: #38bdf8;
-  --muted: #94a3b8;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 淡青主调：清透、有生机、不刺眼，偏高雅 */
+    --background: 168 32% 96%;
+    --foreground: 196 28% 22%;
+    --card: 165 28% 99%;
+    --card-foreground: 196 26% 20%;
+    --primary: 168 30% 38%;
+    --primary-foreground: 165 20% 98%;
+    --secondary: 165 22% 93%;
+    --secondary-foreground: 196 22% 28%;
+    --muted: 165 18% 92%;
+    --muted-foreground: 196 14% 40%;
+    --accent: 172 24% 90%;
+    --accent-foreground: 196 26% 24%;
+    --border: 165 16% 86%;
+    --input: 165 14% 90%;
+    --ring: 168 32% 42%;
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --radius: 0.875rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply min-h-dvh bg-background text-foreground antialiased;
+  }
 }

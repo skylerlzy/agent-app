@@ -18,18 +18,18 @@ export class StubPlanGenerator implements IPlanGenerator {
         description: "（占位）估计转场时间，调用地图路程工具。",
         suggestedTools: ["maps_route_estimate"],
       },
-      {
-        id: "autonomous_step_calendar",
-        description: "（占位）协调用户日程，调用冲突检测工具。",
-        suggestedTools: ["calendar_conflict_check"],
-      },
     ];
     const phase: PlanPhase = {
       id: "phase_autonomous",
       title: "自治规划阶段（占位步骤，正式版由 LLM 生成）",
       steps,
     };
-    return { planId: `plan_${input.sessionId}`, phases: [phase] };
+    return {
+      planId: `plan_${input.sessionId}`,
+      plannerRationale:
+        "占位计划：按出行领域典型路径依次拉取天气、估算路程；正式部署由 LLM 动态生成结构与工具建议。",
+      phases: [phase],
+    };
   }
 
   async revisePlan(plan: ExecutionPlan, _feedback: string): Promise<ExecutionPlan> {

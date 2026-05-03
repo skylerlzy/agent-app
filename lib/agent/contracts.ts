@@ -24,26 +24,36 @@ export interface UserGoal {
   }>;
 }
 
-/** 与「日程协调」相关的用户日历占用（忙碌区间） */
-export interface BusyWindow {
-  start: number;
-  end: number;
-  label?: string;
-}
-
 /** Agent 运行时的用户侧上下文（不含密钥） */
 export interface UserContext {
   userId: string;
   /** 偏好与约束，供规划阶段使用 */
   preferences: TripPreferences;
-  /** 已知忙碌时间，用于日程冲突检测工具 */
-  calendarBusyWindows?: BusyWindow[];
 }
 
 export interface TripPreferences {
+  /** 旅行开始日期 YYYY-MM-DD（与示例项目「旅行日期」一致，注入规划与天气 dateIso） */
+  tripStartDateIso?: string;
+  /** 旅行结束日期 YYYY-MM-DD（含返程日；须不早于 tripStartDateIso） */
+  tripEndDateIso?: string;
+  /** 自由补充的饮食说明（忌口的具体描述等） */
   dietaryNotes?: string;
-  mobilityNeeds?: string;
-  maxDailyTransitMinutes?: number;
+  /** 与示例项目 Step2 一致的饮食预设 */
+  dietaryPreset?: "none" | "vegetarian" | "halal" | "local";
+  /** 旅行节奏，影响规划文案中「每日景点数量」建议 */
+  pace?: "slow" | "balanced" | "fast";
+  /** ACCOMMODATION_OPTIONS 的 id */
+  accommodationType?: "hotel" | "airbnb" | "hostel" | "camping";
+  /** TRAVEL_THEME_OPTIONS 的 id，可多选 */
+  travelThemes?: string[];
+  /** TRANSPORT_OPTIONS 的 id，可多选 */
+  transportPreferences?: string[];
+  /** 人均预算（人民币），供餐饮与活动档次建议参考 */
+  budgetCny?: number;
+  /** 备注与特别要求（对应示例 Step3） */
+  additionalNotes?: string;
+  /** 同行规模，影响路线与强度描述 */
+  travelParty?: "solo" | "couple" | "family" | "group";
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +70,11 @@ export interface PlanStep {
 
 export interface ExecutionPlan {
   planId: string;
+  /**
+   * 规划阶段由 LLM 给出的论证与取舍说明（满足「展现规划与思考」、区别于固定 workflow）。
+   * 若模型未输出则可为空。
+   */
+  plannerRationale?: string;
   /** 高层阶段，便于演示「先规划再执行」 */
   phases: PlanPhase[];
 }
@@ -71,14 +86,10 @@ export interface PlanPhase {
 }
 
 // ---------------------------------------------------------------------------
-// 工具层（至少 2 个主题相关外部工具；此处固定三个接口名）
+// 工具层（至少 2 个主题相关外部工具；此处固定两个接口名）
 // ---------------------------------------------------------------------------
 
-export const TOOL_NAMES = [
-  "weather_forecast",
-  "maps_route_estimate",
-  "calendar_conflict_check",
-] as const;
+export const TOOL_NAMES = ["weather_forecast", "maps_route_estimate"] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -174,7 +185,8 @@ export type ReasoningEvent =
     })
   | (ReasoningEventBase & {
       type: "tool_error";
-      payload: { stepId: string; toolName: ToolName; error: ToolError };
+      /** 可能为 LLM 擅自输出的未注册工具名，故用 string */
+      payload: { stepId: string; toolName: string; error: ToolError };
     })
   | (ReasoningEventBase & {
       type: "reflexion";
@@ -266,12 +278,20 @@ export interface ChatMessage {
   content: string;
 }
 
+/** LLM 调用可选参数（Convex 日志排障用 requestLabel） */
+export interface LLMCompletionOptions {
+  temperature?: number;
+  /** 标识场景，如 plan_draft / plan_revise / react:s1:turn0 */
+  requestLabel?: string;
+}
+
 export interface ILLMClient {
-  complete(messages: ChatMessage[], options?: { temperature?: number }): Promise<string>;
+  complete(messages: ChatMessage[], options?: LLMCompletionOptions): Promise<string>;
   /** 带工具定义的补全（用于 ReAct） */
   completeWithTools?(
     messages: ChatMessage[],
-    tools: { name: string; description: string; parameters: object }[]
+    tools: { name: string; description: string; parameters: object }[],
+    callOptions?: Pick<LLMCompletionOptions, "requestLabel">
   ): Promise<{
     content: string | null;
     toolCalls?: { name: string; arguments: string }[];

@@ -63,7 +63,10 @@ export class LLMReflexionPolicy implements IReflexionPolicy {
         }),
       };
 
-      const raw = await this.llm.complete([system, user], { temperature: 0.2 });
+      const raw = await this.llm.complete([system, user], {
+        temperature: 0.2,
+        requestLabel: `reflexion_${input.step.id}`,
+      });
       const jsonStr = extractJsonObject(raw);
       if (!jsonStr) return this.fallback.decide(input);
 

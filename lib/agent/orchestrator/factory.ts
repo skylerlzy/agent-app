@@ -3,7 +3,6 @@ import type {
   IReflexionPolicy,
   ITraceSink,
 } from "../contracts";
-import { MockLLMClient } from "../llm/MockLLMClient";
 import { OpenAICompatibleClient } from "../llm/OpenAICompatibleClient";
 import { ReactExecutor } from "../loops/ReactExecutor";
 import { LLMPlanGenerator } from "../plan/LLMPlanGenerator";
@@ -15,20 +14,17 @@ import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
 export function createReflexionPolicy(): IReflexionPolicy {
   const rules = new ReflexionPolicy();
   if (process.env.USE_LLM_REFLEXION === "true") {
-    const llm = process.env.DASHSCOPE_API_KEY ? new OpenAICompatibleClient() : new MockLLMClient();
-    return new LLMReflexionPolicy(llm, rules);
+    return new LLMReflexionPolicy(new OpenAICompatibleClient(), rules);
   }
   return rules;
 }
 
-/** 组装自治 Agent 流水线（工具为占位实现，可替换） */
+/** 组装自治 Agent 流水线（天气和风 QWeather、路程高德为真实 HTTP） */
 export function createAutonomousAgentPipeline(traceSink?: ITraceSink): IAutonomousAgent {
   const registry = createStubToolRegistry();
-  const llmClient = process.env.DASHSCOPE_API_KEY || process.env.LLM_API_KEY
-    ? new OpenAICompatibleClient()
-    : new MockLLMClient();
+  const llmClient = new OpenAICompatibleClient();
   const planGenerator = new LLMPlanGenerator(llmClient);
   const reflexion = createReflexionPolicy();
-  const react = new ReactExecutor(llmClient, registry, reflexion);
-  return new PlanExecuteOrchestrator(planGenerator, react, traceSink);
+  const react = new ReactExecutor(llmClient, registry, reflexion, 8);
+  return new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient);
 }

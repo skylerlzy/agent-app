@@ -1,7 +1,7 @@
 node_modules
 .next
-.env
-.env.local
+# 与 travel-planner-ai 一致：仅忽略本地密钥文件，保留可提交的 .env
+.env*.local
 dist
 *.log
 .convex

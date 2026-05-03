@@ -32,6 +32,13 @@ export class ReflexionPolicy implements IReflexionPolicy {
     const { step, error, lastArgs, history } = input;
     const failures = countStepFailures(history);
 
+    if (error.code === "MISSING_CONFIG") {
+      return {
+        diagnosis: `环境配置不足，无法调用外部接口（Reflexion 判定为不可自动修复）：${error.message}`,
+        nextAction: "skip" as const,
+      };
+    }
+
     if (error.code === "AGENT_ABORT" || error.code === "AUTH" || error.code === "FATAL") {
       return {
         diagnosis: `关键错误（${error.code}），无法继续：${error.message}`,

@@ -15,6 +15,10 @@ stages:
 variables:
   NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
   NEXT_TELEMETRY_DISABLED: "1"
+  # Next/Clerk/Convex 在构建期会读取以下变量；请替换为组内真实值或使用 GitLab CI/CD Variables 覆盖
+  NEXT_PUBLIC_CONVEX_URL: "https://build-placeholder.convex.cloud"
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_Y2xlcmsuZXhhbXBsZS5kZXYk"
+  CLERK_SECRET_KEY: "sk_test_ci_placeholder_replace_in_gitlab_variables"
   # 浅克隆，加快拉代码（按需可改为更大深度）
   GIT_DEPTH: "50"
 
