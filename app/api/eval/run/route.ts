@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 
 export const runtime = "nodejs";
@@ -10,6 +11,28 @@ function unauthorized() {
 }
 
 /**
+ * ConvexHttpClient 在 status=error 且带 errorData 时会抛 ConvexError：
+ * super(errorMessage) 往往是泛化的 "Server Error"，可读内容在 .data（来自 errorData）。
+ */
+function formatAgentEvalFailure(e: unknown): string {
+  if (!(e instanceof ConvexError)) {
+    return e instanceof Error ? e.message : String(e);
+  }
+  const d = e.data;
+  if (typeof d === "string" && d.trim().length > 0) {
+    return d.trim();
+  }
+  if (d !== undefined && d !== null) {
+    try {
+      return JSON.stringify(d);
+    } catch {
+      /* ignore */
+    }
+  }
+  return e.message;
+}
+
+/**
  * 评测平台调用：使用 Authorization: Bearer <EVAL_SERVER_SECRET>，
  * 在服务端触发 Convex `runAgentEval`，无需浏览器 Clerk 会话。
  */
@@ -17,7 +40,12 @@ export async function POST(req: NextRequest) {
   const secret = process.env.EVAL_SERVER_SECRET;
   if (!secret || secret.length < 8) {
     return NextResponse.json(
-      { ok: false, error: "server_misconfigured", detail: "EVAL_SERVER_SECRET not set" },
+      {
+        ok: false,
+        error: "server_misconfigured",
+        detail:
+            "EVAL_SERVER_SECRET 未配置或长度不足 8。请在部署环境设置该变量：Render → 你的 Web Service → Environment → 添加 EVAL_SERVER_SECRET（与 Convex Dashboard、评测平台 Java 中完全一致），保存后重新 Deploy。",
+      },
       { status: 503 }
     );
   }
@@ -68,7 +96,11 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, error: "agent_failed", detail: message }, { status: 502 });
+    let detail = formatAgentEvalFailure(e);
+    if (detail.includes("Server Error") && detail.includes("Request ID")) {
+      detail +=
+        " 提示：请到 Convex Dashboard → Logs 用上述 Request ID 检索。若 detail 仅有 Server Error，多为云端仍抛普通 Error 或客户端未读到 errorData；请确认已 deploy 含 ConvexError 的 convex/agent.ts，且该部署 Environment 含 DASHSCOPE_API_KEY、EVAL_SERVER_SECRET（须与 Render/Java 一致）。";
+    }
+    return NextResponse.json({ ok: false, error: "agent_failed", detail }, { status: 502 });
   }
 }

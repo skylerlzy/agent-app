@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { GenericActionCtx } from "convex/server";
 import {
   action,
@@ -91,8 +91,11 @@ async function executeAgentPipeline(
   try {
     pipeline = createAutonomousAgentPipeline(traceSink);
   } catch (e) {
+    if (e instanceof ConvexError) throw e;
     const message = e instanceof Error ? e.message : String(e);
-    throw new Error(`无法初始化 Agent（请检查 DASHSCOPE_API_KEY 等环境变量）: ${message}`);
+    throw new ConvexError(
+      `无法初始化 Agent（Convex Dashboard 须配置 DASHSCOPE_API_KEY 等，与 Next/Render 无关）: ${message}`
+    );
   }
 
   await ctx.runMutation(internal.agent.createSession, {
@@ -110,12 +113,13 @@ async function executeAgentPipeline(
       status: "done",
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
     await ctx.runMutation(internal.agent.setSessionStatus, {
       sessionId: input.sessionId,
       status: "error",
     });
-    throw new Error(message);
+    if (e instanceof ConvexError) throw e;
+    const message = e instanceof Error ? e.message : String(e);
+    throw new ConvexError(message);
   }
 }
 
@@ -262,17 +266,19 @@ export const runAgentEval = action({
   handler: async (ctx, args) => {
     const expected = process.env.EVAL_SERVER_SECRET;
     if (!expected || expected.length < 8) {
-      throw new Error("Convex 未配置有效的 EVAL_SERVER_SECRET（长度至少 8）。");
+      throw new ConvexError(
+        "Convex 未配置有效的 EVAL_SERVER_SECRET（长度至少 8）。请在 Convex Dashboard → Settings → Environment Variables 添加，与 Next/Render/Java 一致；仅配置 Render 无效。"
+      );
     }
     if (args.evalSecret !== expected) {
-      throw new Error("评测密钥无效。");
+      throw new ConvexError("评测密钥无效：EVAL_SERVER_SECRET 须在 Convex、Next（Render）、Java 三端完全一致。");
     }
 
     const existing = await ctx.runQuery(internal.agent.getSessionById, {
       sessionId: args.sessionId,
     });
     if (existing) {
-      throw new Error("该 sessionId 已存在，请更换 sessionId 后重试。");
+      throw new ConvexError("该 sessionId 已存在，请更换 sessionId 后重试。");
     }
 
     const collected: ReasoningEvent[] = [];
