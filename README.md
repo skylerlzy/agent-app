@@ -29,6 +29,15 @@ npm run dev
 
 访问 `/`：未登录可浏览介绍；登录后在**同一首页**运行 Agent 并查看 Convex 实时轨迹。
 
+### 另一台电脑尽量少配置（Docker 一键）
+
+对方**只需安装 Docker Desktop**，把本仓库与已填好的 **`.env.local`** 放到同一目录后：
+
+- **Windows**：双击根目录 **`一键启动.bat`**
+- **Mac/Linux**：`chmod +x 一键启动.sh && ./一键启动.sh`，或执行 **`docker compose up`**
+
+浏览器打开 **http://localhost:3000**。说明与边界见 **[docs/另一台电脑一键运行.md](./docs/另一台电脑一键运行.md)**。
+
 ## 3. Clerk 在本项目中的工作方式
 
 1. **`proxy.ts`**：`clerkMiddleware()` + `createRouteMatcher`，公开 `/`、`/sign-in`、`/sign-up`，其余路由 `auth.protect()`。
@@ -145,9 +154,13 @@ npm run dev
 | 命令 | 说明 |
 |------|------|
 | `npm run dev` | 本地开发 |
-| `npm run build` | 生产构建（CI 需设置 `NEXT_PUBLIC_CONVEX_URL`、`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`、`CLERK_SECRET_KEY` 等，见 `.gitlab-ci.yml`） |
+| `npm run build` | 生产构建（`output: standalone`；CI 需设置 Convex/Clerk 等变量，见 `.gitlab-ci.yml`） |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | 类型检查 |
+
+Windows 下与 CI **verify** 一致的一键预检：`.\scripts\ci-verify-local.ps1`（需已安装 Node 20+，逻辑见脚本内注释）。
+
+合并到**默认分支**后，GitLab 会执行 **verify**（`lint` / `typecheck` / `build`）与 **deploy**（需在 CI/CD Variables 配置 `DEPLOY_WEBHOOK_URL` 或 SSH 相关变量）。镜像仓库与 Runner 说明见 **[docs/GitLab-Runner与NJUGitLab镜像.md](./docs/GitLab-Runner与NJUGitLab镜像.md)**。
 
 ## 9. 课程仓库
 
