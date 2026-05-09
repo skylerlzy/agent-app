@@ -55,6 +55,7 @@ lint_typecheck_build:
 deploy_production:
   stage: deploy
   needs: ["lint_typecheck_build"]
+  timeout: 20m
   # 若 verify 使用了 tags，deploy 需使用相同 tags，否则可能落到不同 Runner 上
   environment:
     name: production

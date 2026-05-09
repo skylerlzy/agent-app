@@ -4,14 +4,17 @@ set -euo pipefail
 # GitLab CI：默认分支合并后的自动部署（Webhook 或 SSH）
 # 所需变量见仓库根目录 .gitlab-ci.yml 注释
 
+# curl 必须带超时：校园网/防火墙丢弃外网 SYN 时，默认会挂很久，表现为 CD job「一直运行」
+CURL_WEBHOOK_OPTS=(--connect-timeout 30 --max-time 120)
+
 if [[ -n "${DEPLOY_WEBHOOK_URL:-}" ]]; then
   echo "[deploy] 使用 Webhook 触发远端更新..."
   if [[ -n "${DEPLOY_WEBHOOK_TOKEN:-}" ]]; then
-    curl -fsS -X POST \
+    curl -fsS "${CURL_WEBHOOK_OPTS[@]}" -X POST \
       -H "Authorization: Bearer ${DEPLOY_WEBHOOK_TOKEN}" \
       "${DEPLOY_WEBHOOK_URL}"
   else
-    curl -fsS -X POST "${DEPLOY_WEBHOOK_URL}"
+    curl -fsS "${CURL_WEBHOOK_OPTS[@]}" -X POST "${DEPLOY_WEBHOOK_URL}"
   fi
 elif [[ -n "${DEPLOY_SSH_HOST:-}" && -n "${DEPLOY_SSH_USER:-}" && -n "${SSH_PRIVATE_KEY:-}" && -n "${DEPLOY_SSH_COMMAND:-}" ]]; then
   echo "[deploy] 使用 SSH 在 ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST} 执行部署命令..."
@@ -38,7 +41,8 @@ fi
 if [[ -n "${DEPLOYMENT_PUBLIC_URL:-}" ]]; then
   echo "[deploy] 探测生产地址（可选配置 DEPLOYMENT_PUBLIC_URL）..."
   sleep 8
-  curl -fsS --retry 4 --retry-delay 5 --retry-all-errors -o /dev/null "${DEPLOYMENT_PUBLIC_URL}" \
+  curl -fsS --connect-timeout 20 --max-time 45 \
+    --retry 3 --retry-delay 5 --retry-all-errors -o /dev/null "${DEPLOYMENT_PUBLIC_URL}" \
     || echo "[deploy] 警告：HTTP 探测失败，请确认服务已启动且 URL 正确。"
 fi
 
