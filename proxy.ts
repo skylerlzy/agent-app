@@ -1,7 +1,16 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+/**
+ * /api/eval/run：评测平台服务端用 Bearer EVAL_SERVER_SECRET 调用，无 Clerk Cookie；
+ * 必须在公开路由中放行，否则 Clerk 会 protect 导致 404/重定向。鉴权在 route.ts 内完成。
+ */
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/eval/run",
+]);
 
 export default clerkMiddleware(async (auth, request) => {
   const pathname = request.nextUrl.pathname;
