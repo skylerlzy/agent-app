@@ -56,6 +56,9 @@ deploy_production:
   stage: deploy
   needs: ["lint_typecheck_build"]
   timeout: 20m
+  # deploy 只做 curl/ssh，不需要 node_modules；禁用 cache 可避免 Runner 上错误的 [runners.cache] 配置
+  # 在「保存缓存」阶段卡死（并消除 cache adapter "" 相关报错）
+  cache: []
   # 若 verify 使用了 tags，deploy 需使用相同 tags，否则可能落到不同 Runner 上
   environment:
     name: production
