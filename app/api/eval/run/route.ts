@@ -30,7 +30,8 @@ function normEvalSecret(s: string): string {
  */
 function formatAgentEvalFailure(e: unknown): string {
   if (!(e instanceof ConvexError)) {
-    return e instanceof Error ? e.message : String(e);
+    const m = e instanceof Error ? e.message : String(e);
+    return m.trim().length > 0 ? m : `非 ConvexError：${e instanceof Error ? e.name : typeof e}（无 message，请查 Render/Convex 日志）`;
   }
   const d = e.data;
   if (typeof d === "string" && d.trim().length > 0) {
@@ -38,12 +39,19 @@ function formatAgentEvalFailure(e: unknown): string {
   }
   if (d !== undefined && d !== null) {
     try {
-      return JSON.stringify(d);
+      const s = JSON.stringify(d);
+      if (s && s !== "{}") {
+        return s;
+      }
     } catch {
       /* ignore */
     }
   }
-  return e.message;
+  const msg = (e.message ?? "").trim();
+  if (msg.length > 0) {
+    return msg;
+  }
+  return "Convex 返回错误但 message/data 均为空；请到 Convex Dashboard → Logs 按时间检索，并核对该部署的 DASHSCOPE_API_KEY、EVAL_SERVER_SECRET、EVAL_PUBLIC_EVAL 等环境变量。";
 }
 
 function evalPublicMode(): boolean {
