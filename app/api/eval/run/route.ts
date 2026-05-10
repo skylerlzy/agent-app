@@ -32,28 +32,41 @@ function formatAgentEvalFailure(e: unknown): string {
   return e.message;
 }
 
+function evalPublicMode(): boolean {
+  const v = process.env.EVAL_PUBLIC_EVAL?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/** 与 Convex 公开评测约定一致；勿在生产公网暴露且无其它防护时开启 */
+const EVAL_PUBLIC_PLACEHOLDER = "__eval_public__";
+
 /**
- * 评测平台调用：使用 Authorization: Bearer <EVAL_SERVER_SECRET>，
- * 在服务端触发 Convex `runAgentEval`，无需浏览器 Clerk 会话。
+ * 评测平台调用：默认 Bearer + EVAL_SERVER_SECRET；
+ * 设置 EVAL_PUBLIC_EVAL=true 时关闭 HTTP 鉴权（仅建议本机/内网），Convex 须同步该变量。
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.EVAL_SERVER_SECRET;
-  if (!secret || secret.length < 8) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "server_misconfigured",
-        detail:
-            "EVAL_SERVER_SECRET 未配置或长度不足 8。请在部署环境设置该变量：Render → 你的 Web Service → Environment → 添加 EVAL_SERVER_SECRET（与 Convex Dashboard、评测平台 Java 中完全一致），保存后重新 Deploy。",
-      },
-      { status: 503 }
-    );
+  const publicEval = evalPublicMode();
+  const secret = process.env.EVAL_SERVER_SECRET ?? "";
+
+  if (!publicEval) {
+    if (!secret || secret.length < 8) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "server_misconfigured",
+          detail:
+              "EVAL_SERVER_SECRET 未配置或长度不足 8；或设置 EVAL_PUBLIC_EVAL=true 以关闭 Bearer（须与 Convex 同步，仅内网使用）。",
+        },
+        { status: 503 }
+      );
+    }
+    const auth = req.headers.get("authorization") ?? "";
+    if (auth !== `Bearer ${secret}`) {
+      return unauthorized();
+    }
   }
 
-  const auth = req.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${secret}`) {
-    return unauthorized();
-  }
+  const evalSecretForConvex = publicEval ? EVAL_PUBLIC_PLACEHOLDER : secret;
 
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl) {
@@ -88,7 +101,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await client.action(api.agent.runAgentEval, {
-      evalSecret: secret,
+      evalSecret: evalSecretForConvex,
       sessionId,
       goalRaw,
       slots: (b.slots as object | undefined) ?? undefined,

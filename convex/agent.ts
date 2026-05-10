@@ -251,9 +251,16 @@ export const runAgent = action({
   },
 });
 
+function convexEvalPublicMode(): boolean {
+  const v = process.env.EVAL_PUBLIC_EVAL?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+const EVAL_PUBLIC_PLACEHOLDER = "__eval_public__";
+
 /**
  * 供评测平台（HTTP 网关）在无 Clerk 会话下触发一次完整运行。
- * 需在 Convex Dashboard 配置 EVAL_SERVER_SECRET，与 Next 路由中的同名变量一致。
+ * 默认需在 Convex 配置 EVAL_SERVER_SECRET；EVAL_PUBLIC_EVAL=true 时改为占位密钥联调（勿用于公网）。
  */
 export const runAgentEval = action({
   args: {
@@ -264,14 +271,22 @@ export const runAgentEval = action({
     preferences: runPreferencesValidator,
   },
   handler: async (ctx, args) => {
-    const expected = process.env.EVAL_SERVER_SECRET;
-    if (!expected || expected.length < 8) {
-      throw new ConvexError(
-        "Convex 未配置有效的 EVAL_SERVER_SECRET（长度至少 8）。请在 Convex Dashboard → Settings → Environment Variables 添加，与 Next/Render/Java 一致；仅配置 Render 无效。"
-      );
-    }
-    if (args.evalSecret !== expected) {
-      throw new ConvexError("评测密钥无效：EVAL_SERVER_SECRET 须在 Convex、Next（Render）、Java 三端完全一致。");
+    if (convexEvalPublicMode()) {
+      if (args.evalSecret !== EVAL_PUBLIC_PLACEHOLDER) {
+        throw new ConvexError(
+          "已开启 EVAL_PUBLIC_EVAL：evalSecret 须为固定值 __eval_public__（由 Next /api/eval/run 注入）。"
+        );
+      }
+    } else {
+      const expected = process.env.EVAL_SERVER_SECRET;
+      if (!expected || expected.length < 8) {
+        throw new ConvexError(
+          "Convex 未配置有效的 EVAL_SERVER_SECRET（长度至少 8）。请在 Convex Dashboard → Environment Variables 添加；或在内网联调时设置 EVAL_PUBLIC_EVAL=true。"
+        );
+      }
+      if (args.evalSecret !== expected) {
+        throw new ConvexError("评测密钥无效：EVAL_SERVER_SECRET 须在 Convex 与 Next 中一致。");
+      }
     }
 
     const existing = await ctx.runQuery(internal.agent.getSessionById, {
