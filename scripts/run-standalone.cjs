@@ -14,14 +14,15 @@ if (!fs.existsSync(serverJs)) {
   process.exit(1);
 }
 
-if (!process.env.HOSTNAME) {
-  process.env.HOSTNAME = "0.0.0.0";
-}
+// Next standalone 的 server.js 使用：hostname = process.env.HOSTNAME || '0.0.0.0'
+// Linux / Render 常把 HOSTNAME 设成 Pod 主机名；若只监听该名，边缘负载均衡连不上 → 502 且无 body。
+// 必须覆盖为 0.0.0.0，不能仅在「未设置」时才写（否则永远不生效）。
+const childEnv = { ...process.env, HOSTNAME: "0.0.0.0" };
 
 const child = spawn(process.execPath, ["server.js"], {
   cwd: standaloneDir,
   stdio: "inherit",
-  env: process.env,
+  env: childEnv,
 });
 
 child.on("exit", (code, signal) => {
