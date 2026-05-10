@@ -10,6 +10,19 @@ function unauthorized() {
   return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 }
 
+function rawCleanEvalSecret(s: string): string {
+  let t = (s ?? "").replace(/\r/g, "").replace(/^\uFEFF/, "").trim();
+  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
+
+/** 与 Java / Convex 一致：去 CR、BOM、误包引号、trim、NFKC */
+function normEvalSecret(s: string): string {
+  return rawCleanEvalSecret(s).normalize("NFKC");
+}
+
 /**
  * ConvexHttpClient 在 status=error 且带 errorData 时会抛 ConvexError：
  * super(errorMessage) 往往是泛化的 "Server Error"，可读内容在 .data（来自 errorData）。
@@ -46,10 +59,10 @@ const EVAL_PUBLIC_PLACEHOLDER = "__eval_public__";
  */
 export async function POST(req: NextRequest) {
   const publicEval = evalPublicMode();
-  const secret = process.env.EVAL_SERVER_SECRET ?? "";
+  const secretNorm = normEvalSecret(process.env.EVAL_SERVER_SECRET ?? "");
 
   if (!publicEval) {
-    if (!secret || secret.length < 8) {
+    if (!secretNorm || secretNorm.length < 8) {
       return NextResponse.json(
         {
           ok: false,
@@ -60,13 +73,15 @@ export async function POST(req: NextRequest) {
         { status: 503 }
       );
     }
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${secret}`) {
+    const rawAuth = (req.headers.get("authorization") ?? "").trim();
+    const bearer =
+        rawAuth.length > 6 && rawAuth.slice(0, 7).toLowerCase() === "bearer "
+            ? normEvalSecret(rawAuth.slice(7))
+            : "";
+    if (bearer.length < 8 || bearer !== secretNorm) {
       return unauthorized();
     }
   }
-
-  const evalSecretForConvex = publicEval ? EVAL_PUBLIC_PLACEHOLDER : secret;
 
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl) {
@@ -97,6 +112,28 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let evalSecretForConvex: string;
+  if (publicEval) {
+    evalSecretForConvex = EVAL_PUBLIC_PLACEHOLDER;
+  } else {
+    const fromBody = typeof b.evalSecret === "string" ? normEvalSecret(b.evalSecret) : "";
+    if (fromBody.length >= 8) {
+      if (fromBody !== secretNorm) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "eval_secret_mismatch",
+            detail: "请求体 evalSecret 与 EVAL_SERVER_SECRET 不一致（已规范化比对）。",
+          },
+          { status: 422 }
+        );
+      }
+      evalSecretForConvex = fromBody;
+    } else {
+      evalSecretForConvex = secretNorm;
+    }
+  }
+
   const client = new ConvexHttpClient(convexUrl);
 
   try {
@@ -113,6 +150,12 @@ export async function POST(req: NextRequest) {
     if (detail.includes("Server Error") && detail.includes("Request ID")) {
       detail +=
         " 提示：请到 Convex Dashboard → Logs 用上述 Request ID 检索。若 detail 仅有 Server Error，多为云端仍抛普通 Error 或客户端未读到 errorData；请确认已 deploy 含 ConvexError 的 convex/agent.ts，且该部署 Environment 含 DASHSCOPE_API_KEY、EVAL_SERVER_SECRET（须与 Render/Java 一致）。";
+    }
+    if (detail.includes("评测密钥无效") && !detail.includes("Convex 侧长度")) {
+      detail +=
+        " 【说明】未出现「Convex 侧长度 / 请求侧长度」时，说明云端 Convex 仍是旧版函数，未包含最新校验逻辑。请在 agent-app 根目录执行："
+        + "npx convex deploy --prod（生产）或 npx convex deploy（开发），并确认 Dashboard 里「当前 URL 对应部署」已设置 EVAL_SERVER_SECRET 且与 Render、Java 完全一致。"
+        + " 若暂时不想管密钥：Next 与 Convex 同时设 EVAL_PUBLIC_EVAL=true 后再 deploy（仅内网演示）。";
     }
     return NextResponse.json({ ok: false, error: "agent_failed", detail }, { status: 502 });
   }

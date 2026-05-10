@@ -256,6 +256,19 @@ function convexEvalPublicMode(): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
+/** 去掉 CR、BOM、首尾空白；若整段被一对引号包住则剥掉（Dashboard 误粘贴常带引号） */
+function rawCleanEvalSecret(s: string): string {
+  let t = (s ?? "").replace(/\r/g, "").replace(/^\uFEFF/, "").trim();
+  if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
+
+function normEvalSecret(s: string): string {
+  return rawCleanEvalSecret(s).normalize("NFKC");
+}
+
 const EVAL_PUBLIC_PLACEHOLDER = "__eval_public__";
 
 /**
@@ -278,14 +291,22 @@ export const runAgentEval = action({
         );
       }
     } else {
-      const expected = process.env.EVAL_SERVER_SECRET;
+      const expected = normEvalSecret(process.env.EVAL_SERVER_SECRET ?? "");
       if (!expected || expected.length < 8) {
         throw new ConvexError(
           "Convex 未配置有效的 EVAL_SERVER_SECRET（长度至少 8）。请在 Convex Dashboard → Environment Variables 添加；或在内网联调时设置 EVAL_PUBLIC_EVAL=true。"
         );
       }
-      if (args.evalSecret !== expected) {
-        throw new ConvexError("评测密钥无效：EVAL_SERVER_SECRET 须在 Convex 与 Next 中一致。");
+      const got = normEvalSecret(args.evalSecret);
+      if (got !== expected) {
+        throw new ConvexError(
+          `评测密钥无效（规范化后比对）：Convex 侧长度=${expected.length}，请求侧长度=${got.length}。`
+              + (expected.length !== got.length
+                  ? " 两侧长度不同，说明三处未使用同一段密钥。"
+                  : " 长度相同但内容不同，或 Convex 与 Next 指向了不同部署。")
+              + " 请在 agent-app 目录执行 npx convex env get EVAL_SERVER_SECRET --prod（或省略 --prod）"
+              + " 与 Render 环境变量逐字对照；Dashboard 勿给整段加引号。改完后务必 npx convex deploy。"
+        );
       }
     }
 
