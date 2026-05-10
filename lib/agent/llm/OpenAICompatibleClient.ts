@@ -1,4 +1,5 @@
 import type { ChatMessage, ILLMClient, LLMCompletionOptions } from "../contracts";
+import { agentDebug } from "../debugLog";
 import { fetchWithTimeout } from "../http/fetchWithTimeout";
 import { resolveLLMConfig } from "./resolveLLMEnv";
 
@@ -48,7 +49,7 @@ async function sleepUntilLlmGap(): Promise<void> {
   const elapsed = Date.now() - lastLlmRequestEndedAt;
   const wait = gap - elapsed;
   if (wait > 0) {
-    console.log(`[agent-llm] LLM_REQUEST_GAP_MS 间隔等待 ${wait}ms`);
+    agentDebug(`[agent-llm] LLM_REQUEST_GAP_MS 间隔等待 ${wait}ms`);
     await sleep(wait);
   }
 }
@@ -114,7 +115,7 @@ export class OpenAICompatibleClient implements ILLMClient {
         const effectiveMaxRetries = heavy ? Math.min(maxRetries, readHeavy429MaxRetries()) : maxRetries;
 
         if (attempt >= effectiveMaxRetries) {
-          console.warn(
+          agentDebug(
             `[agent-llm] HTTP 429 [${label}] 已达最大重试 ${effectiveMaxRetries}${heavy ? "（访问量过大类限流，已自动减少重试以免反复打满）" : ""}，放弃重试`
           );
           return response;
@@ -127,7 +128,7 @@ export class OpenAICompatibleClient implements ILLMClient {
         const baseWait = Math.max(minWaitMs, (fromHeader ?? exponential) * trafficBump);
         const jitter = baseWait * (0.88 + Math.random() * 0.24);
         const waitMs = Math.min(capMs, Math.max(minWaitMs, Math.round(jitter)));
-        console.warn(
+        agentDebug(
           `[agent-llm] HTTP 429 [${label}] 第 ${attempt + 1} 次重试前等待 ${waitMs}ms${heavy ? "（检测到访问量过大类提示）" : ""}`
         );
         await sleep(waitMs);
@@ -139,7 +140,7 @@ export class OpenAICompatibleClient implements ILLMClient {
 
   async complete(messages: ChatMessage[], options?: LLMCompletionOptions): Promise<string> {
     const label = options?.requestLabel ?? "llm_complete";
-    console.log(`[agent-llm] → ${label} model=${this.cfg.model} (chat/completions)`);
+    agentDebug(`[agent-llm] → ${label} model=${this.cfg.model} (chat/completions)`);
     const response = await this.postChatCompletions(
       {
         model: this.cfg.model,
@@ -179,7 +180,7 @@ export class OpenAICompatibleClient implements ILLMClient {
       return { content: text, toolCalls: undefined };
     }
 
-    console.log(`[agent-llm] → ${label} model=${this.cfg.model} (chat/completions+tools n=${tools.length})`);
+    agentDebug(`[agent-llm] → ${label} model=${this.cfg.model} (chat/completions+tools n=${tools.length})`);
 
     const formattedTools = tools.map((t) => ({
       type: "function",
@@ -224,7 +225,7 @@ export class OpenAICompatibleClient implements ILLMClient {
     const filtered = rawCalls.filter((tc) => tc.function?.name && allowedNames.has(tc.function.name));
     if (rawCalls.length > 0 && filtered.length === 0) {
       const attempted = rawCalls.map((tc) => tc.function?.name).filter(Boolean);
-      console.warn(
+      agentDebug(
         `[agent-llm] ${label}: 已丢弃未开放工具调用（仅允许 ${[...allowedNames].join(", ")}），模型输出: ${attempted.join(", ")}`
       );
     }

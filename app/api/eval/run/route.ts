@@ -24,12 +24,39 @@ function normEvalSecret(s: string): string {
   return rawCleanEvalSecret(s).normalize("NFKC");
 }
 
+function formatPlainErrorChain(e: Error): string {
+  const parts: string[] = [];
+  let cur: unknown = e;
+  for (let depth = 0; depth < 6 && cur instanceof Error; depth++) {
+    const msg = (cur.message ?? "").trim();
+    if (msg.length > 0) {
+      parts.push(msg);
+    }
+    cur = cur.cause;
+  }
+  if (parts.length > 0) {
+    return parts.join(" | ");
+  }
+  const stack = (e.stack ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const head = stack.slice(0, 3).join(" ← ");
+  if (head.length > 0) {
+    return `${e.name || "Error"}（无 message，stack 摘要）: ${head.slice(0, 800)}`;
+  }
+  return `${e.name || "Error"}（无 message、无 stack；多为 Convex 客户端或网络层抛出的空 Error，请查 Convex Dashboard → Logs 与 agent-app 终端）`;
+}
+
 /**
  * ConvexHttpClient 在 status=error 且带 errorData 时会抛 ConvexError：
  * super(errorMessage) 往往是泛化的 "Server Error"，可读内容在 .data（来自 errorData）。
  */
 function formatAgentEvalFailure(e: unknown): string {
   if (!(e instanceof ConvexError)) {
+    if (e instanceof Error) {
+      const chain = formatPlainErrorChain(e);
+      if (chain.length > 0) {
+        return chain;
+      }
+    }
     const m = e instanceof Error ? e.message : String(e);
     return m.trim().length > 0 ? m : `非 ConvexError：${e instanceof Error ? e.name : typeof e}（无 message，请查 Render/Convex 日志）`;
   }

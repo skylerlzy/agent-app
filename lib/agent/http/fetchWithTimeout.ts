@@ -1,8 +1,10 @@
+import { agentDebug } from "../debugLog";
+
 /**
  * Convex action / Node 内 fetch 无默认超时，外网 API 挂起会导致前端长期「运行中」。
  * Node/undici 在 abort 时可能抛出 DOMException 等，name 为 AbortError 但非标准 Error，需统一识别。
  *
- * 传入 `debugTag` 时会在 Convex 日志中打印 START/OK/FAIL，便于判断「哪一次 HTTP 超时」。
+ * 传入 `debugTag` 时仅在 AGENT_VERBOSE_LOGS=1 时打印 START/OK/FAIL（避免 Convex 单函数日志 256 行上限）。
  */
 function isAbortLike(e: unknown): boolean {
   if (e == null || typeof e !== "object") return false;
@@ -23,19 +25,19 @@ export async function fetchWithTimeout(
   const safeUrl = url.split("?")[0];
   const t0 = Date.now();
   if (debugTag) {
-    console.log(`[agent-http] START tag=${tag} timeoutMs=${timeoutMs} url=${safeUrl}`);
+    agentDebug(`[agent-http] START tag=${tag} timeoutMs=${timeoutMs} url=${safeUrl}`);
   }
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
     if (debugTag) {
-      console.log(`[agent-http] OK tag=${tag} status=${res.status} elapsedMs=${Date.now() - t0}`);
+      agentDebug(`[agent-http] OK tag=${tag} status=${res.status} elapsedMs=${Date.now() - t0}`);
     }
     return res;
   } catch (e) {
     if (debugTag) {
-      console.error(`[agent-http] FAIL tag=${tag} elapsedMs=${Date.now() - t0}`, e);
+      agentDebug(`[agent-http] FAIL tag=${tag} elapsedMs=${Date.now() - t0}`, e);
     }
     if (isAbortLike(e)) {
       throw new Error(`${timeoutLabel}（${timeoutMs / 1000}s）[tag=${tag}]`);

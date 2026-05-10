@@ -9,6 +9,7 @@ import type {
   ReasoningEvent,
 } from "../contracts";
 import { buildRunDoneSummary, type ToolLogEntry } from "./finalTravelSummary";
+import { agentDebug } from "../debugLog";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 
 function flattenSteps(plan: ExecutionPlan) {
@@ -94,7 +95,7 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     const skipRevise =
       process.env.SKIP_PLAN_REVISION === "1" || process.env.SKIP_PLAN_REVISION === "true";
     if (skipRevise) {
-      console.log("[agent] SKIP_PLAN_REVISION=1: skip revisePlan (one fewer LLM call)");
+      agentDebug("[agent] SKIP_PLAN_REVISION=1: skip revisePlan (one fewer LLM call)");
       const note = emitter.emit({
         type: "reflexion",
         payload: {
