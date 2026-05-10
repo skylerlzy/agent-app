@@ -4,7 +4,8 @@ import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+/** 单次 Convex runAgentEval 上限（秒）；与评测平台 Java/前端超时对齐 */
+export const maxDuration = 1500;
 
 function unauthorized() {
   return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -149,12 +150,12 @@ export async function POST(req: NextRequest) {
     let detail = formatAgentEvalFailure(e);
     if (detail.includes("Server Error") && detail.includes("Request ID")) {
       detail +=
-        " 提示：请到 Convex Dashboard → Logs 用上述 Request ID 检索。若 detail 仅有 Server Error，多为云端仍抛普通 Error 或客户端未读到 errorData；请确认已 deploy 含 ConvexError 的 convex/agent.ts，且该部署 Environment 含 DASHSCOPE_API_KEY、EVAL_SERVER_SECRET（须与 Render/Java 一致）。";
+        " 提示：请到 Convex Dashboard → Logs 用上述 Request ID 检索。若 detail 仅有 Server Error，多为云端仍抛普通 Error 或客户端未读到 errorData；请确认已 deploy 含 ConvexError 的 convex/agent.ts，且该部署 Environment 含 DASHSCOPE_API_KEY、EVAL_SERVER_SECRET（须与本机 .env.local、Java 评测后端一致）。";
     }
     if (detail.includes("评测密钥无效") && !detail.includes("Convex 侧长度")) {
       detail +=
         " 【说明】未出现「Convex 侧长度 / 请求侧长度」时，说明云端 Convex 仍是旧版函数，未包含最新校验逻辑。请在 agent-app 根目录执行："
-        + "npx convex deploy --prod（生产）或 npx convex deploy（开发），并确认 Dashboard 里「当前 URL 对应部署」已设置 EVAL_SERVER_SECRET 且与 Render、Java 完全一致。"
+        + "npx convex deploy --prod（生产）或 npx convex deploy（开发），并确认 Dashboard 里「当前 URL 对应部署」已设置 EVAL_SERVER_SECRET 且与 Next、Java 评测后端完全一致。"
         + " 若暂时不想管密钥：Next 与 Convex 同时设 EVAL_PUBLIC_EVAL=true 后再 deploy（仅内网演示）。";
     }
     return NextResponse.json({ ok: false, error: "agent_failed", detail }, { status: 502 });

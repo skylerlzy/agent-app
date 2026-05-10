@@ -94,7 +94,7 @@ async function executeAgentPipeline(
     if (e instanceof ConvexError) throw e;
     const message = e instanceof Error ? e.message : String(e);
     throw new ConvexError(
-      `无法初始化 Agent（Convex Dashboard 须配置 DASHSCOPE_API_KEY 等，与 Next/Render 无关）: ${message}`
+      `无法初始化 Agent（Convex Dashboard 须配置 DASHSCOPE_API_KEY 等，与 Next 部署无关）: ${message}`
     );
   }
 
@@ -305,7 +305,7 @@ export const runAgentEval = action({
                   ? " 两侧长度不同，说明三处未使用同一段密钥。"
                   : " 长度相同但内容不同，或 Convex 与 Next 指向了不同部署。")
               + " 请在 agent-app 目录执行 npx convex env get EVAL_SERVER_SECRET --prod（或省略 --prod）"
-              + " 与 Render 环境变量逐字对照；Dashboard 勿给整段加引号。改完后务必 npx convex deploy。"
+              + " 与 Next / Java 评测侧环境变量逐字对照；Dashboard 勿给整段加引号。改完后务必 npx convex deploy。"
         );
       }
     }
