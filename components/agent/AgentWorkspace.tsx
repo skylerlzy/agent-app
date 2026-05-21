@@ -2,26 +2,28 @@
 
 import { SignInButton } from "@clerk/nextjs";
 import { useAction, useQuery } from "convex/react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { AgentRunSummary } from "@/components/agent/AgentRunSummary";
-import { ReasoningPipeline } from "@/components/agent/ReasoningPipeline";
-import { TracePanel } from "@/components/agent/TracePanel";
+import { ChatMessageList } from "@/components/agent/ChatMessageList";
+import { ConversationList } from "@/components/agent/ConversationList";
+import { TripPreferencesPanel } from "@/components/agent/TripPreferencesPanel";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import {
-  ACCOMMODATION_OPTIONS,
-  DIETARY_PRESET_OPTIONS,
-  TRANSPORT_OPTIONS,
-  TRAVEL_PARTY_OPTIONS,
-  TRAVEL_PACE_OPTIONS,
-  TRAVEL_THEME_OPTIONS,
-} from "@/lib/tripPreferenceOptions";
-import { CalendarRange, Rocket } from "lucide-react";
+  autoTitleFromMessage,
+  createConversation,
+  extractSummaryFromEvents,
+  loadConversations,
+  saveConversations,
+  toTripPreferences,
+  type LocalConversation,
+  type StoredChatMessage,
+} from "@/lib/conversationStorage";
+import type { ReasoningEvent } from "@/lib/agent/contracts";
+import { Send, Rocket } from "lucide-react";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -29,374 +31,363 @@ function parseLocalNoon(iso: string): number {
   return Date.parse(`${iso}T12:00:00`);
 }
 
-function ChipRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div>
-        <p className="text-xs font-semibold text-foreground">{label}</p>
-        {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-      </div>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </div>
-  );
+function validatePreferences(conversation: LocalConversation): string | null {
+  const { tripStart, tripEnd } = conversation.preferences;
+  const ts = tripStart.trim();
+  const te = tripEnd.trim();
+  if (ts && !ISO_DAY.test(ts)) return "旅行开始日期格式须为 YYYY-MM-DD。";
+  if (te && !ISO_DAY.test(te)) return "旅行结束日期格式须为 YYYY-MM-DD。";
+  if (ts && te && parseLocalNoon(ts) > parseLocalNoon(te)) {
+    return "旅行结束日期须不早于开始日期。";
+  }
+  return null;
 }
 
-function Chip({
-  active,
-  disabled,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-        active
-          ? "border-primary/50 bg-primary/15 text-primary shadow-sm"
-          : "border-border/80 bg-background/80 text-muted-foreground hover:border-primary/30 hover:bg-muted/40",
-        disabled && "pointer-events-none opacity-50"
-      )}
-    >
-      {children}
-    </button>
-  );
+/** 取当前对话中最后一次成功运行的轨迹（供右侧摘要） */
+function latestSummaryEvents(conversation: LocalConversation | null): ReasoningEvent[] {
+  if (!conversation) return [];
+  for (let i = conversation.messages.length - 1; i >= 0; i--) {
+    const m = conversation.messages[i];
+    if (m.role === "assistant" && m.traceEvents?.length && m.status === "done") {
+      return m.traceEvents;
+    }
+  }
+  return [];
 }
 
 export function AgentWorkspace() {
-  const [userInput, setUserInput] = useState("");
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<LocalConversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
-  const [tripStart, setTripStart] = useState("");
-  const [tripEnd, setTripEnd] = useState("");
-  const [travelThemes, setTravelThemes] = useState<string[]>([]);
-  const [pace, setPace] = useState<"" | "slow" | "balanced" | "fast">("");
-  const [accommodationType, setAccommodationType] = useState<"" | "hotel" | "airbnb" | "hostel" | "camping">("");
-  const [dietaryPreset, setDietaryPreset] = useState<"" | "none" | "vegetarian" | "halal" | "local">("");
-  const [transportPreferences, setTransportPreferences] = useState<string[]>([]);
-  const [travelParty, setTravelParty] = useState<"" | "solo" | "couple" | "family" | "group">("");
-  const [budgetCny, setBudgetCny] = useState("");
-  const [dietaryNotes, setDietaryNotes] = useState("");
-  const [additionalNotes, setAdditionalNotes] = useState("");
-
-  const events = useQuery(api.agent.listTraceEvents, sessionId ? { sessionId } : "skip");
+  const conversationsRef = useRef(conversations);
+  const activeIdRef = useRef(activeId);
+  const finishedSessionsRef = useRef<Set<string>>(new Set());
+  conversationsRef.current = conversations;
+  activeIdRef.current = activeId;
 
   const runAgent = useAction(api.agent.runAgent);
+  const liveEvents = useQuery(api.agent.listTraceEvents, activeSessionId ? { sessionId: activeSessionId } : "skip");
 
-  const preferences = useMemo(() => {
-    const budgetNum = budgetCny.trim() ? Number(budgetCny.trim()) : undefined;
-    const start = tripStart.trim();
-    const end = tripEnd.trim();
-    return {
-      tripStartDateIso: ISO_DAY.test(start) ? start : undefined,
-      tripEndDateIso: ISO_DAY.test(end) ? end : undefined,
-      travelThemes: travelThemes.length ? travelThemes : undefined,
-      pace: pace || undefined,
-      accommodationType: accommodationType || undefined,
-      dietaryPreset: dietaryPreset === "" ? undefined : dietaryPreset,
-      transportPreferences: transportPreferences.length ? transportPreferences : undefined,
-      travelParty: travelParty || undefined,
-      budgetCny: budgetNum !== undefined && Number.isFinite(budgetNum) && budgetNum > 0 ? budgetNum : undefined,
-      dietaryNotes: dietaryNotes.trim() || undefined,
-      additionalNotes: additionalNotes.trim() || undefined,
-    };
-  }, [
-    tripStart,
-    tripEnd,
-    travelThemes,
-    pace,
-    accommodationType,
-    dietaryPreset,
-    transportPreferences,
-    travelParty,
-    budgetCny,
-    dietaryNotes,
-    additionalNotes,
-  ]);
+  const activeConversation = useMemo(
+    () => conversations.find((c) => c.id === activeId) ?? null,
+    [conversations, activeId]
+  );
 
-  const toggleInList = (id: string, list: string[], setList: (v: string[]) => void) => {
-    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-  };
+  const summaryEvents = useMemo(() => {
+    if (loading && liveEvents?.length) return liveEvents;
+    const cached = latestSummaryEvents(activeConversation);
+    if (cached.length) return cached;
+    return liveEvents ?? [];
+  }, [activeConversation, liveEvents, loading]);
 
-  const run = useCallback(async () => {
-    if (!userInput.trim()) {
+  useEffect(() => {
+    const stored = loadConversations();
+    if (stored.length > 0) {
+      setConversations(stored);
+      setActiveId(stored[0].id);
+    } else {
+      const first = createConversation();
+      setConversations([first]);
+      setActiveId(first.id);
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated) saveConversations(conversations);
+  }, [conversations, hydrated]);
+
+  const updateConversation = useCallback(
+    (id: string, updater: (c: LocalConversation) => LocalConversation) => {
+      setConversations((prev) => prev.map((c) => (c.id === id ? updater(c) : c)));
+    },
+    []
+  );
+
+  const handleNew = useCallback(() => {
+    const c = createConversation();
+    setConversations((prev) => [c, ...prev]);
+    setActiveId(c.id);
+    setDraft("");
+    setRunError(null);
+  }, []);
+
+  const handleRename = useCallback((id: string, title: string) => {
+    updateConversation(id, (c) => ({ ...c, title, updatedAt: Date.now() }));
+  }, [updateConversation]);
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      setConversations((prev) => {
+        const next = prev.filter((c) => c.id !== id);
+        if (next.length === 0) {
+          const fresh = createConversation();
+          setActiveId(fresh.id);
+          return [fresh];
+        }
+        if (activeId === id) setActiveId(next[0].id);
+        return next;
+      });
+    },
+    [activeId]
+  );
+
+  const handlePreferencesChange = useCallback(
+    (prefs: LocalConversation["preferences"]) => {
+      if (!activeId) return;
+      updateConversation(activeId, (c) => ({
+        ...c,
+        preferences: prefs,
+        updatedAt: Date.now(),
+      }));
+    },
+    [activeId, updateConversation]
+  );
+
+  /** 运行结束后将轨迹与摘要写回对应对话 */
+  useEffect(() => {
+    if (!activeSessionId || !liveEvents?.length) return;
+    if (finishedSessionsRef.current.has(activeSessionId)) return;
+
+    const last = liveEvents[liveEvents.length - 1];
+    const finished = last.type === "run_done" || last.type === "run_error";
+    if (!finished) return;
+
+    finishedSessionsRef.current.add(activeSessionId);
+    const summary = extractSummaryFromEvents(liveEvents);
+    const convId = activeIdRef.current;
+    if (!convId) return;
+
+    updateConversation(convId, (c) => ({
+      ...c,
+      updatedAt: Date.now(),
+      messages: c.messages.map((m) =>
+        m.sessionId === activeSessionId
+          ? {
+              ...m,
+              status: last.type === "run_done" ? ("done" as const) : ("error" as const),
+              content: summary || m.content,
+              traceEvents: liveEvents as ReasoningEvent[],
+            }
+          : m
+      ),
+    }));
+
+    setLoading(false);
+    setRunError(last.type === "run_error" ? summary : null);
+    setActiveSessionId(null);
+  }, [liveEvents, activeSessionId, updateConversation]);
+
+  const send = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || !activeConversation || !activeId) {
       setRunError("请输入出行目标。");
       return;
     }
-    const ts = tripStart.trim();
-    const te = tripEnd.trim();
-    if (ts && !ISO_DAY.test(ts)) {
-      setRunError("旅行开始日期格式须为 YYYY-MM-DD。");
+
+    const prefErr = validatePreferences(activeConversation);
+    if (prefErr) {
+      setRunError(prefErr);
       return;
     }
-    if (te && !ISO_DAY.test(te)) {
-      setRunError("旅行结束日期格式须为 YYYY-MM-DD。");
-      return;
-    }
-    if (ts && te && parseLocalNoon(ts) > parseLocalNoon(te)) {
-      setRunError("旅行结束日期须不早于开始日期。");
-      return;
-    }
+
     setRunError(null);
-    const sid = crypto.randomUUID();
-    setSessionId(sid);
+    const sessionId = crypto.randomUUID();
+    const userMsgId = crypto.randomUUID();
+    const assistantMsgId = crypto.randomUUID();
+    const now = Date.now();
+    const isFirstUserMsg = activeConversation.messages.filter((m) => m.role === "user").length === 0;
+
+    const userMsg: StoredChatMessage = {
+      id: userMsgId,
+      role: "user",
+      content: text,
+      createdAt: now,
+    };
+    const assistantMsg: StoredChatMessage = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      sessionId,
+      status: "running",
+      createdAt: now + 1,
+    };
+
+    updateConversation(activeId, (c) => ({
+      ...c,
+      title: isFirstUserMsg ? autoTitleFromMessage(text) : c.title,
+      updatedAt: now,
+      messages: [...c.messages, userMsg, assistantMsg],
+    }));
+
+    setDraft("");
+    setActiveSessionId(sessionId);
     setLoading(true);
-    const serverTimeoutMs = Number(process.env.NEXT_PUBLIC_AGENT_CLIENT_TIMEOUT_MS) || 180_000;
-    try {
-      await Promise.race([
-        runAgent({
-          sessionId: sid,
-          goalRaw: userInput.trim(),
-          slots: undefined,
-          preferences,
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject(
-              new Error(
-                `等待 Convex 已超过 ${serverTimeoutMs / 1000} 秒。请检查 DashScope/外网工具超时配置，或在 Convex Dashboard 查看 action 日志。`
-              )
-            );
-          }, serverTimeoutMs);
-        }),
-      ]);
-    } catch (e) {
+    finishedSessionsRef.current.delete(sessionId);
+
+    const preferences = toTripPreferences(activeConversation.preferences);
+
+    /**
+     * 不在前端 await 整段 action：长任务可能超过 180s，但 Convex 仍会继续执行并写入 trace。
+     * 完成态由 listTraceEvents 订阅的 run_done / run_error 驱动（见上方 useEffect）。
+     */
+    void runAgent({
+      sessionId,
+      goalRaw: text,
+      slots: undefined,
+      preferences,
+    }).catch((e) => {
+      if (finishedSessionsRef.current.has(sessionId)) return;
       const msg = e instanceof Error ? e.message : String(e);
       setRunError(msg);
-    } finally {
       setLoading(false);
-    }
-  }, [runAgent, userInput, preferences]);
+      setActiveSessionId(null);
+      updateConversation(activeId, (c) => ({
+        ...c,
+        messages: c.messages.map((m) =>
+          m.id === assistantMsgId ? { ...m, status: "error" as const, content: msg } : m
+        ),
+      }));
+    });
+  }, [draft, activeConversation, activeId, runAgent, updateConversation]);
+
+  if (!hydrated) {
+    return (
+      <div className="flex h-[min(70vh,720px)] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20">
+        <p className="text-sm text-muted-foreground">加载对话…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-6 lg:gap-8">
-      <div className="grid gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:items-stretch lg:gap-8">
-        <GlassCard className="cursor-default lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:min-h-[22rem]">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-lg">出行规划</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-6">
-            <div className="space-y-5 rounded-xl border border-border/60 bg-muted/20 px-3 py-4 sm:px-4">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                与示例项目一致：先选<strong>旅行日期</strong>，再选主题、节奏等；日期会写入规划与天气查询区间（并合并到 goal.slots）。
-              </p>
+    <div className="flex h-[min(calc(100vh-8rem),820px)] min-h-[520px] flex-col gap-3 lg:gap-4">
+      {/* 小屏：对话列表置于顶部 */}
+      <ConversationList
+        className="max-h-44 shrink-0 lg:hidden"
+        conversations={conversations}
+        activeId={activeId}
+        onSelect={setActiveId}
+        onNew={handleNew}
+        onRename={handleRename}
+        onDelete={handleDelete}
+      />
 
-              <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <CalendarRange className="h-4 w-4 text-primary" strokeWidth={1.75} />
-                  旅行日期
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">开始日期</label>
-                    <Input
-                      type="date"
-                      value={tripStart}
-                      onChange={(e) => setTripStart(e.target.value)}
-                      disabled={loading}
-                      className="cursor-pointer font-medium"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">结束日期</label>
-                    <Input
-                      type="date"
-                      value={tripEnd}
-                      onChange={(e) => setTripEnd(e.target.value)}
-                      disabled={loading}
-                      className="cursor-pointer font-medium"
-                    />
-                  </div>
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">可选；填写后 Agent 将按该窗口安排逐日天气与行程跨度。</p>
-              </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(11rem,14rem)_1fr_minmax(16rem,22rem)] lg:gap-4 xl:grid-cols-[15rem_1fr_24rem]">
+        {/* 左侧：历史对话 */}
+        <ConversationList
+          className="hidden min-h-0 lg:flex"
+          conversations={conversations}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onNew={handleNew}
+          onRename={handleRename}
+          onDelete={handleDelete}
+        />
 
-              <ChipRow label="旅行主题" hint="可多选">
-                {TRAVEL_THEME_OPTIONS.map((t) => (
-                  <Chip
-                    key={t.id}
-                    active={travelThemes.includes(t.id)}
-                    disabled={loading}
-                    onClick={() => toggleInList(t.id, travelThemes, setTravelThemes)}
-                  >
-                    {t.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <ChipRow label="旅行节奏" hint="影响日程松紧与景点数量建议">
-                {TRAVEL_PACE_OPTIONS.map((p) => (
-                  <Chip
-                    key={p.id}
-                    active={pace === p.id}
-                    disabled={loading}
-                    onClick={() => setPace((prev) => (prev === p.id ? "" : p.id))}
-                  >
-                    {p.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <ChipRow label="住宿类型">
-                {ACCOMMODATION_OPTIONS.map((a) => (
-                  <Chip
-                    key={a.id}
-                    active={accommodationType === a.id}
-                    disabled={loading}
-                    onClick={() =>
-                      setAccommodationType((prev) => (prev === a.id ? "" : (a.id as typeof accommodationType)))
-                    }
-                  >
-                    {a.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <ChipRow label="饮食习惯预设">
-                {DIETARY_PRESET_OPTIONS.map((d) => (
-                  <Chip
-                    key={d.id}
-                    active={dietaryPreset === d.id}
-                    disabled={loading}
-                    onClick={() =>
-                      setDietaryPreset((prev) => (prev === d.id ? "" : (d.id as typeof dietaryPreset)))
-                    }
-                  >
-                    {d.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-foreground">饮食补充说明（可选）</label>
-                <Input
-                  value={dietaryNotes}
-                  onChange={(e) => setDietaryNotes(e.target.value)}
-                  placeholder="过敏源、忌口细节等"
-                  disabled={loading}
-                />
-              </div>
-
-              <ChipRow label="交通方式偏好" hint="可多选，用于规划文案与路线 mode 倾向">
-                {TRANSPORT_OPTIONS.map((t) => (
-                  <Chip
-                    key={t.id}
-                    active={transportPreferences.includes(t.id)}
-                    disabled={loading}
-                    onClick={() => toggleInList(t.id, transportPreferences, setTransportPreferences)}
-                  >
-                    {t.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <ChipRow label="同行规模">
-                {TRAVEL_PARTY_OPTIONS.map((p) => (
-                  <Chip
-                    key={p.id}
-                    active={travelParty === p.id}
-                    disabled={loading}
-                    onClick={() => setTravelParty((prev) => (prev === p.id ? "" : (p.id as typeof travelParty)))}
-                  >
-                    {p.label}
-                  </Chip>
-                ))}
-              </ChipRow>
-
-              <div className="space-y-2 sm:max-w-xs">
-                <label className="text-xs font-semibold text-foreground">人均预算（元，可选）</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={budgetCny}
-                  onChange={(e) => setBudgetCny(e.target.value)}
-                  placeholder="如 3000"
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-foreground">备注与特别要求（可选）</label>
-                <Textarea
-                  value={additionalNotes}
-                  onChange={(e) => setAdditionalNotes(e.target.value)}
-                  placeholder="例：带老人小孩、必去某博物馆、尽量避开周一闭馆…"
-                  className="min-h-[88px] resize-y text-sm"
-                  disabled={loading}
-                />
-              </div>
+        {/* 中间：聊天 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/60 shadow-sm ring-1 ring-primary/5">
+          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-foreground">
+                {activeConversation?.title ?? "对话"}
+              </h2>
+              <p className="text-[11px] text-muted-foreground">Plan-Execute · ReAct · 工具调用</p>
             </div>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs lg:hidden" onClick={handleNew}>
+              新建
+            </Button>
+          </header>
 
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">出行目标</label>
-              <Textarea
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="例：下周末从南京到杭州两天一夜，想了解目的地天气与高铁站到景区的大致路程耗时。"
-                className="min-h-[140px] cursor-text"
+          <ChatMessageList
+            messages={activeConversation?.messages ?? []}
+            activeSessionId={activeSessionId}
+            liveEvents={liveEvents ?? undefined}
+            isRunning={loading}
+          />
+
+          <div className="shrink-0 space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
+            {activeConversation ? (
+              <TripPreferencesPanel
+                preferences={activeConversation.preferences}
+                onChange={handlePreferencesChange}
                 disabled={loading}
               />
-            </div>
+            ) : null}
 
             {runError ? (
-              <p className="rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              <p className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {runError}
               </p>
             ) : null}
 
-            <Button
-              type="button"
-              onClick={() => void run()}
-              disabled={loading}
-              className="h-11 w-full gap-2 text-base shadow-md shadow-primary/15 sm:w-auto sm:px-10"
-            >
-              {loading ? (
-                "编排运行中…"
-              ) : (
-                <>
-                  <Rocket className="h-4 w-4" />
-                  运行自治 Agent
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </GlassCard>
+            <div className="flex gap-2">
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="例：下周末从南京到杭州两天一夜，想了解天气与路程耗时…"
+                className="min-h-[44px] max-h-32 flex-1 resize-none text-sm"
+                disabled={loading}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={() => void send()}
+                disabled={loading || !draft.trim()}
+                className="h-auto shrink-0 gap-1.5 px-4"
+              >
+                {loading ? (
+                  "运行中…"
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    发送
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </section>
 
-        <ReasoningPipeline
-          className="lg:col-start-2 lg:row-start-1"
-          events={events ?? []}
-          isRunning={loading}
-        />
-
-        <GlassCard className="cursor-default lg:col-start-2 lg:row-start-2 lg:flex lg:min-h-0 lg:flex-col">
-          <CardHeader className="shrink-0 pb-2">
-            <CardTitle className="text-lg">推理时间轴</CardTitle>
-            <CardDescription>默认仅显示当前焦点；可展开查看完整事件流。</CardDescription>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-hidden pt-0">
-            <TracePanel events={events ?? []} isAwaitingRun={loading} variant="peek" />
-          </CardContent>
-        </GlassCard>
+        {/* 右侧：行程摘要 */}
+        <aside className="hidden min-h-0 flex-col overflow-hidden lg:flex">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+            {summaryEvents.length > 0 ? (
+              <AgentRunSummary events={summaryEvents} className="sticky top-0" />
+            ) : (
+              <GlassCard className="cursor-default border-dashed">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">出行方案</CardTitle>
+                  <CardDescription className="text-xs">
+                    发送消息后，Agent 生成的 Markdown 行程摘要将显示在此；运行过程中会实时更新。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    景点与日程供参考，开放时间与票价以官方为准，铁路以 12306 为准。
+                  </p>
+                </CardContent>
+              </GlassCard>
+            )}
+          </div>
+        </aside>
       </div>
 
-      <AgentRunSummary events={events ?? []} />
+      {/* 小屏：摘要折叠在聊天区下方 */}
+      {summaryEvents.length > 0 ? (
+        <div className="max-h-[38vh] shrink-0 overflow-y-auto lg:hidden">
+          <AgentRunSummary events={summaryEvents} />
+        </div>
+      ) : null}
     </div>
   );
 }

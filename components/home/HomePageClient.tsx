@@ -12,7 +12,7 @@ export function HomePageClient() {
       </Show>
 
       <Show when="signed-in">
-        <main className="mx-auto w-full max-w-6xl animate-fade-in px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+        <main className="mx-auto w-full max-w-[1600px] animate-fade-in px-3 py-6 sm:px-5 sm:py-8 lg:px-6 lg:py-10">
           <section>
             <AgentWorkspace />
           </section>

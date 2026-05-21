@@ -78,7 +78,7 @@ export function AgentRunSummary({ events, className }: AgentRunSummaryProps) {
       <CardContent className="relative space-y-6 pt-0">
         {summary ? (
           sections.length > 0 ? (
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="flex flex-col gap-5">
               {sections.map((sec, i) => (
                 <article
                   key={`${sec.title}-${i}`}
