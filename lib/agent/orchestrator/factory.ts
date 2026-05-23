@@ -1,6 +1,7 @@
 import type {
   IAutonomousAgent,
   IReflexionPolicy,
+  ISkillRegistry,
   ITraceSink,
 } from "../contracts";
 import { OpenAICompatibleClient } from "../llm/OpenAICompatibleClient";
@@ -11,6 +12,10 @@ import { ReflexionPolicy } from "../reflexion/ReflexionPolicy";
 import { createStubToolRegistry } from "../tools/factory";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
 
+export interface AutonomousAgentPipelineDeps {
+  skillRegistry?: ISkillRegistry;
+}
+
 export function createReflexionPolicy(): IReflexionPolicy {
   const rules = new ReflexionPolicy();
   if (process.env.USE_LLM_REFLEXION === "true") {
@@ -20,11 +25,15 @@ export function createReflexionPolicy(): IReflexionPolicy {
 }
 
 /** 组装自治 Agent 流水线（天气和风 QWeather、路程高德为真实 HTTP） */
-export function createAutonomousAgentPipeline(traceSink?: ITraceSink): IAutonomousAgent {
+export function createAutonomousAgentPipeline(
+  traceSink?: ITraceSink,
+  _deps?: AutonomousAgentPipelineDeps
+): IAutonomousAgent {
+  void _deps?.skillRegistry;
   const registry = createStubToolRegistry();
   const llmClient = new OpenAICompatibleClient();
   const planGenerator = new LLMPlanGenerator(llmClient);
   const reflexion = createReflexionPolicy();
-  const react = new ReactExecutor(llmClient, registry, reflexion, 8);
+  const react = new ReactExecutor(llmClient, registry, reflexion, 5);
   return new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient);
 }

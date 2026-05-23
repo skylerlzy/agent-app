@@ -1,4 +1,5 @@
 import type { AgentRunInput, ExecutionPlan, ILLMClient, ToolName } from "../contracts";
+import { appendSkillSection } from "../skills/appendSkillSection";
 
 function flattenSteps(plan: ExecutionPlan) {
   return plan.phases.flatMap((phase) => phase.steps ?? []);
@@ -75,7 +76,8 @@ export async function synthesizeTravelMarkdown(
       ? toolLogs.map((t) => `--- ${t.stepId} / ${t.toolName} ---\n${t.summary}`).join("\n\n")
       : "（本回合无成功工具 JSON。请仅依据用户目标与偏好给出原则性建议，并明确写出「未查询到实时天气/路线数据」。）";
 
-  const system = `你是面向最终用户的智能出行顾问。你只能把「工具观测数据」中出现的数值与文字当作事实；禁止编造未出现在其中的气温、AQI、距离、耗时或票价。
+  const system = appendSkillSection(
+    `你是面向最终用户的智能出行顾问。你只能把「工具观测数据」中出现的数值与文字当作事实；禁止编造未出现在其中的气温、AQI、距离、耗时或票价。
 请用 **Markdown** 写一份完整、友好的中文出行方案。必须按顺序包含以下二级标题（行首 ## ）：
 ## 行程总览
 ## 天气与着装提示
@@ -88,7 +90,9 @@ export async function synthesizeTravelMarkdown(
 要求：
 - 「主题与推荐景点」「日程建议」可写具体景点/街区名称，但须标注为**常识性参考**，并提醒开放时间、预约与门票以官方为准；高铁/动车时刻以 12306 为准。
 - 若 weather_forecast / maps_route_estimate 数据缺失或 JSON 中有错误提示，须在对应章节诚实说明，不得杜撰补全。
-- 结合用户偏好 JSON 中的 **tripStartDateIso / tripEndDateIso**、节奏、主题、交通方式、预算、住宿类型、饮食预设、同行规模与备注，写可执行的**按日**日程粒度（例如「上午 / 下午」），但不要假装已订票。`;
+- 结合用户偏好 JSON 中的 **tripStartDateIso / tripEndDateIso**、节奏、主题、交通方式、预算、住宿类型、饮食预设、同行规模与备注，写可执行的**按日**日程粒度（例如「上午 / 下午」），但不要假装已订票。`,
+    input.skillSystemSection
+  );
 
   const user = `【用户目标】\n${input.goal.rawText}\n\n【结构化槽位】\n${JSON.stringify(input.goal.slots ?? {}, null, 2)}\n\n【用户偏好】\n${JSON.stringify(input.context.preferences, null, 2)}\n\n【执行计划】\n${planBrief}\n\n【工具观测数据】\n${toolsBlock}`;
 

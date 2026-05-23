@@ -197,6 +197,45 @@ export type ReasoningEvent =
   | (ReasoningEventBase & { type: "run_error"; payload: { message: string } });
 
 // ---------------------------------------------------------------------------
+// Skill 体系（迭代三 · 成员1）
+// ---------------------------------------------------------------------------
+
+/** 用户上传或内置的 Skill 元数据 */
+export interface AgentSkill {
+  id: string;
+  userId: string;
+  /** 目录名，如 high-speed-rail-transfer */
+  name: string;
+  description: string;
+  markdownBody: string;
+  tags: string[];
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+  /** 内置 skill 标记，UI 只读不可删 */
+  isBuiltin?: boolean;
+}
+
+/** 运行时注入 Prompt 的 Skill 片段 */
+export interface ResolvedSkill {
+  skillId: string;
+  name: string;
+  /** 注入 system prompt 的正文（可截断） */
+  promptSection: string;
+}
+
+export interface ISkillRegistry {
+  listForUser(userId: string): Promise<AgentSkill[]>;
+  resolve(skillIds: string[]): Promise<ResolvedSkill[]>;
+  matchSkills?(input: {
+    userId: string;
+    goalText: string;
+    tags?: string[];
+    limit?: number;
+  }): Promise<string[]>;
+}
+
+// ---------------------------------------------------------------------------
 // Agent 运行入口
 // ---------------------------------------------------------------------------
 
@@ -204,6 +243,10 @@ export interface AgentRunInput {
   sessionId: string;
   goal: UserGoal;
   context: UserContext;
+  /** 迭代三：本轮激活的 skill id 列表（评测不传时默认 []） */
+  activeSkillIds?: string[];
+  /** 迭代三：由 action 解析后注入 LLM 的 Skill system 段 */
+  skillSystemSection?: string;
 }
 
 export interface IAgentOrchestrator {
@@ -297,3 +340,5 @@ export interface ILLMClient {
     toolCalls?: { name: string; arguments: string }[];
   }>;
 }
+
+export { buildSkillSystemSection } from "./skills/buildSkillSystemSection";

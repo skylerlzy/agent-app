@@ -10,6 +10,7 @@ import { internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
 import type { AgentRunInput, ITraceSink, ReasoningEvent, UserGoal } from "../lib/agent/contracts";
+import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
 
 const runSlotsValidator = v.optional(
   v.object({
@@ -49,6 +50,7 @@ type RunBody = {
   goalRaw: string;
   slots?: UserGoal["slots"];
   preferences?: AgentRunInput["context"]["preferences"];
+  activeSkillIds?: string[];
 };
 
 function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
@@ -77,7 +79,22 @@ function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
       userId,
       preferences: pref,
     },
+    activeSkillIds: args.activeSkillIds ?? [],
   };
+}
+
+async function enrichInputWithSkills(
+  ctx: GenericActionCtx<DataModel>,
+  input: AgentRunInput,
+  userId: string
+): Promise<AgentRunInput> {
+  const skillIds = input.activeSkillIds ?? [];
+  if (!skillIds.length) return input;
+
+  const catalog = await ctx.runQuery(internal.skills.listForUserInternal, { userId });
+  const registry = SkillRegistry.fromSkills(catalog);
+  const skillSystemSection = await resolveSkillSystemSection(registry, skillIds);
+  return { ...input, skillSystemSection };
 }
 
 async function executeAgentPipeline(
@@ -89,7 +106,7 @@ async function executeAgentPipeline(
 ): Promise<void> {
   let pipeline;
   try {
-    pipeline = createAutonomousAgentPipeline(traceSink);
+    pipeline = createAutonomousAgentPipeline(traceSink, {});
   } catch (e) {
     if (e instanceof ConvexError) throw e;
     const message = e instanceof Error ? e.message : String(e);
@@ -104,8 +121,10 @@ async function executeAgentPipeline(
     goalText: goalRaw,
   });
 
+  const enrichedInput = await enrichInputWithSkills(ctx, input, userId);
+
   try {
-    for await (const _ of pipeline.run(input)) {
+    for await (const _ of pipeline.run(enrichedInput)) {
       /* 事件已通过 traceSink */
     }
     await ctx.runMutation(internal.agent.setSessionStatus, {
@@ -215,12 +234,15 @@ export const listTraceEvents = query({
   },
 });
 
+const activeSkillIdsValidator = v.optional(v.array(v.string()));
+
 export const runAgent = action({
   args: {
     sessionId: v.string(),
     goalRaw: v.string(),
     slots: runSlotsValidator,
     preferences: runPreferencesValidator,
+    activeSkillIds: activeSkillIdsValidator,
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -282,6 +304,7 @@ export const runAgentEval = action({
     goalRaw: v.string(),
     slots: runSlotsValidator,
     preferences: runPreferencesValidator,
+    activeSkillIds: activeSkillIdsValidator,
   },
   handler: async (ctx, args) => {
     if (convexEvalPublicMode()) {

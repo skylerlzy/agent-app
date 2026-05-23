@@ -18,6 +18,12 @@ import type {
 import { TOOL_NAMES } from "../contracts";
 import { FAILED_TURN_PREFIX } from "../reflexion/ReflexionPolicy";
 import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
+import { validateToolArguments } from "../tools/ToolArgumentValidator";
+import {
+  hashToolResultSummary,
+  normalizeToolCallKey,
+  parseDoNotRetrySameArgs,
+} from "../tools/toolCallGuard";
 
 const REGISTERED_TOOL_NAMES = new Set<string>(TOOL_NAMES);
 
@@ -89,11 +95,13 @@ export class ReactExecutor implements IReactExecutor {
       {
         role: "system",
         content: `你是一个执行专家。当前任务步骤是: "${step.description}"。
-        你的目标是完成本步所需的事实收集，尽量**充分**使用本步可用工具（可多次调用），再收束为简短结论。
-        【硬性约束】你只能使用本回合 API 传入的 tools 列表中的函数（仅 weather_forecast、maps_route_estimate）。禁止输出任何其它函数名（例如 air_forecast、flight_api、booking_service）；禁止在正文中要求系统「再注册」或「开放」新工具。需要空气质量时，只调用 weather_forecast（其实现已包含 v7/air/now）。
-        【工具使用策略】
-        - weather_forecast：对**目的地**与（若步骤涉及出发/中转）**出发地**可分别查询；若用户行程跨多日，对**关键日期**各查一次 dateIso（须与系统提供的「未来14日」公历一致）。同市也可查「实时 + 7 日 outlook」辅助穿衣与是否适合户外活动。
-        - maps_route_estimate：对**不同 OD 对**分段调用（如「高铁站→核心景区」「酒店→机场」）；同城优先 transit，步行可达短距离可 walking，跨城或枢纽间 transit 无方案时用 driving 并接受工具返回的说明。可比较不同 mode 用于「地铁 vs 驾车」参考。
+        你的目标是完成本步所需的事实收集，在**必要且参数不同**时调用工具，然后收束为简短结论。
+        【硬性约束】你只能使用本回合 API 传入的 tools 列表中的函数（仅 weather_forecast、maps_route_estimate）。禁止输出任何其它函数名。
+        【禁止重复调用】同一 (tool, args) 在本步内已成功调用过则**禁止再调**；工具返回 doNotRetrySameArgs=true 或 note 含「不在 N 日预报内」「已改读实时」时，须**立即**用文字收束，勿同参重试。
+        【读 note 即能力上限】工具 note 说明的数据边界即为最终答案，不要试图「再调一次拿更多字段」。
+        【工具契约】
+        - weather_forecast：**能** 7/15/30 日逐日 precip、实时、weekOutlook、airQualityAvailable；**不能** 逐小时降水概率、超 30 日指定日。AQI 不可用时不重试。
+        - maps_route_estimate：**仅** 同城 POI 间 walking/transit/driving 粗估；**禁止** 跨城高铁/枢纽 transit、站内换乘 <500m、12306 时刻。origin/destination 须「城市+具体 POI」，禁止「XX区域」「XX青旅」等模糊名。跨城铁路用文字+12306。
         当信息已足够完成本步骤时，请给出简短总结并结束；不要捏造工具名。
         工具参数必须符合 JSON Schema。`,
       },
@@ -104,13 +112,15 @@ export class ReactExecutor implements IReactExecutor {
           `当前槽位信息: ${JSON.stringify(goal.slots || {})}。`,
           `用户偏好: ${JSON.stringify(context.preferences)}。（若含 tripStartDateIso/tripEndDateIso，天气 dateIso 须落在该区间内并与【未来14日】对照一致。）`,
           ...buildAgentTimeContextLines(),
-          `若本步建议了 weather_forecast，请实际调用并传入 city（必填）；dateIso 用 YYYY-MM-DD 且必须取自上文【未来14日】列表（与「下周三」等对照一致）；工具会返回当日/多日气温、降水、空气质量及 7 日 outlook 摘要，请充分利用。`,
-          `maps_route_estimate：请按步骤描述拆成多段 OD 调用以覆盖用户动线；若返回含驾车回退说明，须在最终思考中复述给用户。若距离/时间为空，可改 mode 或换更具体 POI/区县名重试。`,
+          `若本步建议了 weather_forecast：city 必填；dateIso 须取自【未来14日】；**不同 city/dateIso 各调一次即可**，同参禁止重试；读 note 与 airQualityAvailable。`,
+          `maps_route_estimate：仅同城分段 OD（如「深圳市深圳北站→深圳市南山区某景区」）；跨城高铁/枢纽勿调 maps；地名须含城市+具体 POI。`,
         ].join("\n"),
       },
     ];
 
     const history: ReactTurn[] = [];
+    const successfulCallKeys = new Map<string, string>();
+    let lastSuccessSummaryHash: string | undefined;
     let turn = 0;
     let done = false;
 
@@ -244,8 +254,61 @@ export class ReactExecutor implements IReactExecutor {
         }
         done = true;
       } else {
+        const validated = validateToolArguments(toolName, parsed.data as ToolArguments);
+        if (!validated.ok) {
+          yield emitter.emit({
+            type: "tool_error",
+            payload: { stepId: step.id, toolName, error: validated.error },
+          });
+          history.push({
+            ...currentTurn,
+            toolResultSummary: `${FAILED_TURN_PREFIX}${validated.error.code}:${validated.error.message}`,
+          });
+          messages.push({ role: "assistant", content: thoughtText });
+          messages.push({
+            role: "user",
+            content: validated.error.retryable
+              ? `${validated.error.message} 请修正参数或改用文字完成本步。`
+              : `${validated.error.message} 本步请**不要**再调用 maps/weather，直接文字收束。`,
+          });
+          if (!validated.error.retryable) {
+            done = true;
+          }
+          turn++;
+          continue;
+        }
+
+        const execArgs = validated.normalized;
+        const callKey = normalizeToolCallKey(toolName, execArgs);
+        if (successfulCallKeys.has(callKey)) {
+          const prev = successfulCallKeys.get(callKey)!;
+          yield emitter.emit({
+            type: "tool_error",
+            payload: {
+              stepId: step.id,
+              toolName,
+              error: {
+                code: "DUPLICATE_TOOL_CALL",
+                message: "同一步内禁止相同 (tool, args) 重复调用。",
+                retryable: false,
+              },
+            },
+          });
+          history.push({
+            ...currentTurn,
+            toolResultSummary: `${FAILED_TURN_PREFIX}DUPLICATE_TOOL_CALL:已有结果 ${prev.slice(0, 500)}`,
+          });
+          messages.push({ role: "assistant", content: thoughtText });
+          messages.push({
+            role: "user",
+            content: `【护栏】同参数已成功调用过，结果: ${prev.slice(0, 2000)}。请立即文字收束本步，禁止再调工具。`,
+          });
+          turn++;
+          continue;
+        }
+
         // 参数校验通过，正式调用工具
-        yield emitter.emit({ type: "tool_call", payload: { stepId: step.id, toolName, args: parsed.data as ToolArguments } });
+        yield emitter.emit({ type: "tool_call", payload: { stepId: step.id, toolName, args: execArgs } });
 
         const toolCtx = {
           userId: context.userId,
@@ -254,7 +317,7 @@ export class ReactExecutor implements IReactExecutor {
         };
         let result: ToolResult;
         try {
-          result = await def.execute(parsed.data, toolCtx);
+          result = await def.execute(execArgs, toolCtx);
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : String(error);
           const retryable = /timeout|abort|429|network|econnreset|etimedout|fetch failed|限流/i.test(message);
@@ -275,14 +338,37 @@ export class ReactExecutor implements IReactExecutor {
           currentTurn.toolResultSummary = summary;
           history.push({ ...currentTurn });
 
+          successfulCallKeys.set(callKey, summary);
+
+          const summaryHash = hashToolResultSummary(summary);
+          if (lastSuccessSummaryHash !== undefined && lastSuccessSummaryHash === summaryHash) {
+            yield emitter.emit({
+              type: "tool_result",
+              payload: { stepId: step.id, toolName, summary: summary.slice(0, 12_000) },
+            });
+            done = true;
+            turn++;
+            break;
+          }
+          lastSuccessSummaryHash = summaryHash;
+
           yield emitter.emit({
             type: "tool_result",
             payload: { stepId: step.id, toolName, summary: summary.slice(0, 12_000) },
           });
 
-          // 将观察到的结果喂回给 LLM
+          const doNotRetry = parseDoNotRetrySameArgs(result.data);
           messages.push({ role: "assistant", content: thoughtText });
-          messages.push({ role: "user", content: `工具执行结果: ${summary}。请基于此结果继续或结束本步骤。` });
+          messages.push({
+            role: "user",
+            content: doNotRetry
+              ? `工具执行结果: ${summary}。【重要】note/doNotRetrySameArgs 表明已达能力上限，禁止相同参数再调。请立即文字收束本步。`
+              : `工具执行结果: ${summary}。请基于此结果继续（勿同参重试）或结束本步骤。`,
+          });
+          if (doNotRetry) {
+            turn++;
+            continue;
+          }
         } else {
           // 工具执行时发生业务错误（如 API 超时等），进入反思流程
           yield emitter.emit({ type: "tool_error", payload: { stepId: step.id, toolName, error: result.error } });

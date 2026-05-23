@@ -36,6 +36,8 @@ export interface LocalConversation {
   updatedAt: number;
   messages: StoredChatMessage[];
   preferences: ConversationPreferences;
+  /** 本轮对话附加的 Skill id */
+  activeSkillIds: string[];
 }
 
 export function defaultPreferences(): ConversationPreferences {
@@ -63,6 +65,7 @@ export function createConversation(title = "新对话"): LocalConversation {
     updatedAt: now,
     messages: [],
     preferences: defaultPreferences(),
+    activeSkillIds: [],
   };
 }
 
@@ -72,7 +75,12 @@ export function loadConversations(): LocalConversation[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as LocalConversation[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((c) => ({
+          ...c,
+          activeSkillIds: Array.isArray(c.activeSkillIds) ? c.activeSkillIds : [],
+        }))
+      : [];
   } catch {
     return [];
   }

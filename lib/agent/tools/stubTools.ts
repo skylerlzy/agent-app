@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { fetchWithTimeout } from "../http/fetchWithTimeout";
 import type { ToolContext, ToolDefinition, ToolResult } from "../contracts";
+import { inferCityFromText } from "./ToolArgumentValidator";
 
 function toolHttpTimeoutMs(): number {
   const raw = process.env.TOOL_HTTP_TIMEOUT_MS;
@@ -14,12 +15,18 @@ function toolHttpTimeoutMs(): number {
 }
 
 /** 与 travel-planner-ai `convex/location.ts` 一致：地理编码得到「经度,纬度」供 direction 接口使用 */
-type AmapGeoPoint = { lng: number; lat: number; adcode?: string };
+type AmapGeoPoint = { lng: number; lat: number; adcode?: string; formattedAddress?: string };
 
 async function amapGeocodeToPoint(address: string, apiKey: string): Promise<AmapGeoPoint | null> {
   const q = address.trim();
   if (!q) return null;
-  const geoUrl = `https://restapi.amap.com/v3/geocode/geo?address=${encodeURIComponent(q)}&city=${encodeURIComponent(q)}&key=${encodeURIComponent(apiKey)}`;
+  const cityHint = inferCityFromText(q);
+  const params = new URLSearchParams({
+    address: q,
+    key: apiKey,
+  });
+  if (cityHint) params.set("city", cityHint);
+  const geoUrl = `https://restapi.amap.com/v3/geocode/geo?${params.toString()}`;
 
   const geoRes = await fetchWithTimeout(
     geoUrl,
@@ -33,23 +40,52 @@ async function amapGeocodeToPoint(address: string, apiKey: string): Promise<Amap
   }
   const geoData = (await geoRes.json()) as {
     status?: string;
-    geocodes?: { location?: string; adcode?: string }[];
+    geocodes?: { location?: string; adcode?: string; formatted_address?: string }[];
   };
   if (String(geoData.status) !== "1" || !geoData.geocodes?.length) {
     return null;
   }
-  const loc = geoData.geocodes[0]?.location;
+  const g0 = geoData.geocodes[0];
+  const loc = g0?.location;
   if (!loc || typeof loc !== "string") return null;
   const parts = loc.split(",").map((s) => Number(s.trim()));
   if (parts.length < 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) {
     return null;
   }
-  const ad = geoData.geocodes[0]?.adcode;
+  const ad = g0?.adcode;
   return {
     lng: parts[0],
     lat: parts[1],
     adcode: typeof ad === "string" && /^\d{6}$/.test(ad) ? ad : undefined,
+    formattedAddress: typeof g0?.formatted_address === "string" ? g0.formatted_address : undefined,
   };
+}
+
+const MAX_SAME_CITY_OD_KM = 120;
+
+function validateGeocodePair(
+  origin: string,
+  destination: string,
+  originPt: AmapGeoPoint,
+  destPt: AmapGeoPoint
+): string | null {
+  const oc = inferCityFromText(origin);
+  const dc = inferCityFromText(destination);
+  const distKm = haversineMeters(originPt.lng, originPt.lat, destPt.lng, destPt.lat) / 1000;
+  if (oc && dc && oc === dc && distKm > MAX_SAME_CITY_OD_KM) {
+    return `起终点均含「${oc}」但地理编码相距约 ${distKm.toFixed(0)} km，疑似 POI 歧义。请改用「${oc}+具体 POI」如「${oc.replace(/市$/u, "")}市南山区深圳湾公园南门」。`;
+  }
+  if ((oc || dc) && distKm > 500 && oc !== dc) {
+    /* 跨城长距离由后续 transit 拒绝或驾车回退处理 */
+    return null;
+  }
+  if (oc && !dc && distKm > MAX_SAME_CITY_OD_KM) {
+    return `起点含「${oc}」但与终点相距约 ${distKm.toFixed(0)} km；请为 destination 补全「城市+具体 POI」。`;
+  }
+  if (dc && !oc && distKm > MAX_SAME_CITY_OD_KM) {
+    return `终点含「${dc}」但与起点相距约 ${distKm.toFixed(0)} km；请为 origin 补全「城市+具体 POI」。`;
+  }
+  return null;
 }
 
 /** 取首段并去掉行政区划后缀，便于和风 [GeoAPI 城市搜索](https://dev.qweather.com/docs/api/geoapi/city-lookup) 命中 */
@@ -130,7 +166,7 @@ async function qweatherCityLookupOne(
 async function resolveQweatherLocation(
   cityRaw: string,
   apiKey: string
-): Promise<{ id: string; displayName: string } | null> {
+): Promise<{ id: string; displayName: string; lat?: string; lon?: string } | null> {
   const trimmed = cityRaw.trim();
   const normalized = normalizeCityQuery(trimmed);
   const candidates = [...new Set([normalized, trimmed].filter((s) => s.length > 0))];
@@ -139,9 +175,23 @@ async function resolveQweatherLocation(
     const row = await qweatherCityLookupOne(apiKey, c, c.slice(0, 20));
     if (row?.id) {
       const displayName = [row.name, row.adm1].filter(Boolean).join(" · ") || row.id;
-      return { id: row.id, displayName };
+      return { id: row.id, displayName, lat: row.lat, lon: row.lon };
     }
   }
+  return null;
+}
+
+function daysFromToday(iso: string): number {
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(`${iso}T12:00:00`);
+  return Math.round((target.getTime() - todayLocal.getTime()) / 86_400_000);
+}
+
+function pickForecastPath(daysAhead: number): "/v7/weather/7d" | "/v7/weather/15d" | "/v7/weather/30d" | null {
+  if (daysAhead <= 7) return "/v7/weather/7d";
+  if (daysAhead <= 15) return "/v7/weather/15d";
+  if (daysAhead <= 30) return "/v7/weather/30d";
   return null;
 }
 
@@ -193,7 +243,7 @@ function formatDurationHuman(seconds: number): string {
 export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note: string }> = {
   name: "weather_forecast",
   description:
-    "查询城市天气与空气质量（和风：GeoAPI → weather/now 与/或 weather/7d 指定日 + v7/air/now）。**可多次调用**：不同 city（出发/目的/中转）、不同 dateIso（行程中多个关键日）；dateIso 须与系统「未来14日」一致。返回中含 weekOutlookText 时对多日穿衣与是否适合户外活动安排很有用。",
+    "和风天气：**能返回** 实时天气、7/15/30 日内逐日预报（含 precip 日总量 mm）、weekOutlookText；若 GeoAPI 有坐标则尝试 airquality/v1 空气质量。**不能返回** 超出 30 天的指定日预报、逐小时 14:00–17:00 降水概率（需 hourly API，本工具无）。同参再调不会新增字段；若 note 含「不在 N 日预报内」或 doNotRetrySameArgs=true 须立即收束。dateIso 超出 7 天时会自动尝试 15d/30d。",
   argsSchema: weatherArgs,
   async execute(args, _ctx: ToolContext): Promise<ToolResult<any>> {
     const apiKey = process.env.QWEATHER_API_KEY?.trim();
@@ -209,7 +259,7 @@ export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note
       };
     }
 
-    let loc: { id: string; displayName: string } | null;
+    let loc: { id: string; displayName: string; lat?: string; lon?: string } | null;
     try {
       loc = await resolveQweatherLocation(args.city, apiKey);
     } catch (e) {
@@ -264,52 +314,68 @@ export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note
     };
 
     let summaryNote: string | undefined;
+    let doNotRetrySameArgs = false;
+    let forecastSource: "7d" | "15d" | "30d" | "now" | undefined;
     let city = loc.displayName;
     let temperature: number | undefined;
     let weather: string | undefined;
     let tempMin: number | undefined;
     let tempMax: number | undefined;
     let precipMm: number | undefined;
-    /** 复用同一次 7d 响应生成 weekOutlook，避免重复请求 */
-    let cached7dDaily: QwDailyRow[] | undefined;
+    /** 复用同一次 daily 响应生成 weekOutlook，避免重复请求 */
+    let cachedDaily: QwDailyRow[] | undefined;
 
-    if (useForecast) {
-      try {
-        const r = await fetchJson(
-          "/v7/weather/7d",
-          { location: loc.id, lang: "zh", unit: "m" },
-          "和风 7 日预报请求超时（可调 TOOL_HTTP_TIMEOUT_MS）",
-          `qweather:7d:${loc.id}`
-        );
-        const body = r.body as { code?: string; daily?: QwDailyRow[] } | null;
-        if (r.ok && body?.code === "200" && Array.isArray(body.daily)) {
-          cached7dDaily = body.daily;
-          const day = body.daily.find((d) => d.fxDate === wantDate);
-          if (day) {
-            tempMax = day.tempMax != null ? Number(day.tempMax) : undefined;
-            tempMin = day.tempMin != null ? Number(day.tempMin) : undefined;
-            precipMm = day.precip != null ? Number(day.precip) : undefined;
-            temperature = tempMax;
-            const parts = [
-              day.textDay && `白天${day.textDay}`,
-              day.textNight && `夜间${day.textNight}`,
-              tempMax != null && tempMin != null && `气温 ${tempMin}°C～${tempMax}°C`,
-              precipMm != null && !Number.isNaN(precipMm) && `降水量约 ${precipMm} mm`,
-            ].filter(Boolean) as string[];
-            weather =
-              parts.length > 0
-                ? parts.join("；")
-                : [day.textDay, day.textNight].filter(Boolean).join("，") || undefined;
-            summaryNote = `预报日 ${wantDate}（和风 weather/7d）`;
+    if (useForecast && wantDate) {
+      const daysAhead = daysFromToday(wantDate);
+      const forecastPath = pickForecastPath(daysAhead);
+      if (forecastPath === null) {
+        summaryNote = `请求的 ${wantDate} 超出 30 日预报范围，已改读实时天气；请勿对同参重复调用。`;
+        doNotRetrySameArgs = true;
+      } else {
+        forecastSource = forecastPath.replace("/v7/weather/", "") as "7d" | "15d" | "30d";
+        try {
+          const r = await fetchJson(
+            forecastPath,
+            { location: loc.id, lang: "zh", unit: "m" },
+            `和风 ${forecastSource} 预报请求超时（可调 TOOL_HTTP_TIMEOUT_MS）`,
+            `qweather:${forecastSource}:${loc.id}`
+          );
+          const body = r.body as { code?: string; daily?: QwDailyRow[] } | null;
+          if (r.ok && body?.code === "200" && Array.isArray(body.daily)) {
+            cachedDaily = body.daily;
+            const day = body.daily.find((d) => d.fxDate === wantDate);
+            if (day) {
+              tempMax = day.tempMax != null ? Number(day.tempMax) : undefined;
+              tempMin = day.tempMin != null ? Number(day.tempMin) : undefined;
+              precipMm = day.precip != null ? Number(day.precip) : undefined;
+              temperature = tempMax;
+              const parts = [
+                day.textDay && `白天${day.textDay}`,
+                day.textNight && `夜间${day.textNight}`,
+                tempMax != null && tempMin != null && `气温 ${tempMin}°C～${tempMax}°C`,
+                precipMm != null && !Number.isNaN(precipMm) && `降水量约 ${precipMm} mm`,
+              ].filter(Boolean) as string[];
+              weather =
+                parts.length > 0
+                  ? parts.join("；")
+                  : [day.textDay, day.textNight].filter(Boolean).join("，") || undefined;
+              summaryNote = `预报日 ${wantDate}（和风 weather/${forecastSource}）`;
+            } else {
+              summaryNote = `请求的 ${wantDate} 不在本次 ${forecastSource} 返回日期内，已改读实时天气。`;
+              doNotRetrySameArgs = true;
+            }
           } else {
-            summaryNote = `请求的 ${wantDate} 不在本次返回的 7 日预报日期内，已改读实时天气。`;
+            const code =
+              body && typeof body === "object" && "code" in body
+                ? String((body as { code: unknown }).code)
+                : "?";
+            summaryNote = `${forecastSource} 预报不可用（code=${code}），已改读实时天气。`;
+            doNotRetrySameArgs = true;
           }
-        } else {
-          const code = body && typeof body === "object" && "code" in body ? String((body as { code: unknown }).code) : "?";
-          summaryNote = `7 日预报不可用（code=${code}），已改读实时天气。`;
+        } catch (e) {
+          summaryNote = `${forecastSource ?? "daily"} 预报请求失败：${e instanceof Error ? e.message : String(e)}；已尝试实时天气。`;
+          doNotRetrySameArgs = true;
         }
-      } catch (e) {
-        summaryNote = `7 日预报请求失败：${e instanceof Error ? e.message : String(e)}；已尝试实时天气。`;
       }
     }
 
@@ -337,7 +403,10 @@ export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note
         }
         temperature = body.now.temp != null ? Number(body.now.temp) : undefined;
         weather = body.now.text;
-        if (!summaryNote) summaryNote = "实时天气（和风 weather/now）";
+        if (!summaryNote) {
+          summaryNote = "实时天气（和风 weather/now）";
+          forecastSource = "now";
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         return {
@@ -355,39 +424,74 @@ export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note
     let airQualityAqi: number | undefined;
     let airQualityCategory: string | undefined;
     let pm2p5: number | undefined;
-    try {
-      const airR = await fetchJson(
-        "/v7/air/now",
-        { location: loc.id, lang: "zh" },
-        "和风空气质量请求超时（可调 TOOL_HTTP_TIMEOUT_MS）",
-        `qweather:air:${loc.id}`
-      );
-      const airBody = airR.body as {
-        code?: string;
-        now?: { aqi?: string; category?: string; pm2p5?: string };
-      } | null;
-      if (airR.ok && airBody?.code === "200" && airBody.now) {
-        airQualityAqi = airBody.now.aqi != null ? Number(airBody.now.aqi) : undefined;
-        airQualityCategory = airBody.now.category;
-        pm2p5 = airBody.now.pm2p5 != null ? Number(airBody.now.pm2p5) : undefined;
-        const airBits = [
-          airQualityCategory && `空气质量 ${airQualityCategory}`,
-          airQualityAqi != null && !Number.isNaN(airQualityAqi) && `AQI ${airQualityAqi}`,
-          pm2p5 != null && !Number.isNaN(pm2p5) && `PM2.5 ${pm2p5}`,
-        ].filter(Boolean) as string[];
-        if (airBits.length && weather) {
-          weather = `${weather}；${airBits.join("，")}`;
-        } else if (airBits.length) {
-          weather = airBits.join("，");
-        }
+    let airQualityAvailable = false;
+
+    const tryAirV1 = async (): Promise<boolean> => {
+      if (!loc.lat || !loc.lon) return false;
+      try {
+        const airR = await fetchJson(
+          `/airquality/v1/current/${loc.lat}/${loc.lon}`,
+          {},
+          "和风 airquality/v1 请求超时",
+          `qweather:airv1:${loc.id}`
+        );
+        const airBody = airR.body as {
+          indexes?: { code?: string; aqi?: number; category?: string }[];
+          pollutants?: { code?: string; concentration?: { value?: number } }[];
+        } | null;
+        if (!airR.ok || !airBody?.indexes?.length) return false;
+        const cn = airBody.indexes.find((i) => i.code === "cn-mee") ?? airBody.indexes[0];
+        if (cn?.aqi != null) airQualityAqi = Number(cn.aqi);
+        if (cn?.category) airQualityCategory = cn.category;
+        const pm = airBody.pollutants?.find((p) => p.code === "pm2p5");
+        if (pm?.concentration?.value != null) pm2p5 = Number(pm.concentration.value);
+        return airQualityAqi != null || !!airQualityCategory;
+      } catch {
+        return false;
       }
-    } catch {
-      /* 空气质量为增强项，失败不阻断天气 */
+    };
+
+    airQualityAvailable = await tryAirV1();
+    if (!airQualityAvailable) {
+      try {
+        const airR = await fetchJson(
+          "/v7/air/now",
+          { location: loc.id, lang: "zh" },
+          "和风 v7/air/now 请求超时",
+          `qweather:air:${loc.id}`
+        );
+        const airBody = airR.body as {
+          code?: string;
+          now?: { aqi?: string; category?: string; pm2p5?: string };
+        } | null;
+        if (airR.ok && airBody?.code === "200" && airBody.now) {
+          airQualityAqi = airBody.now.aqi != null ? Number(airBody.now.aqi) : undefined;
+          airQualityCategory = airBody.now.category;
+          pm2p5 = airBody.now.pm2p5 != null ? Number(airBody.now.pm2p5) : undefined;
+          airQualityAvailable =
+            airQualityAqi != null || !!airQualityCategory || pm2p5 != null;
+        }
+      } catch {
+        /* 空气质量为增强项 */
+      }
+    }
+
+    if (airQualityAvailable) {
+      const airBits = [
+        airQualityCategory && `空气质量 ${airQualityCategory}`,
+        airQualityAqi != null && !Number.isNaN(airQualityAqi) && `AQI ${airQualityAqi}`,
+        pm2p5 != null && !Number.isNaN(pm2p5) && `PM2.5 ${pm2p5}`,
+      ].filter(Boolean) as string[];
+      if (airBits.length && weather) {
+        weather = `${weather}；${airBits.join("，")}`;
+      } else if (airBits.length) {
+        weather = airBits.join("，");
+      }
     }
 
     let weekOutlookText: string | undefined;
-    if (cached7dDaily?.length) {
-      weekOutlookText = formatOutlookFromDaily(cached7dDaily, 7);
+    if (cachedDaily?.length) {
+      weekOutlookText = formatOutlookFromDaily(cachedDaily, 7);
     } else {
       try {
         const r7 = await fetchJson(
@@ -419,9 +523,18 @@ export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note
         airQualityAqi,
         airQualityCategory,
         pm2p5,
+        airQualityAvailable,
         dateIso: wantDate && DATE_ISO.test(wantDate) ? wantDate : undefined,
         note: summaryNote,
         weekOutlookText,
+        forecastSource,
+        doNotRetrySameArgs,
+        capabilities: {
+          dailyForecastMaxDays: 30,
+          hasHourlyPrecipProbability: false,
+          returnsRealtime: true,
+          sameArgsWillNotAddFields: true,
+        },
       },
     };
   },
@@ -465,7 +578,7 @@ function buildRangeExceededFallback(
 export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note: string }> = {
   name: "maps_route_estimate",
   description:
-    "高德 Web：地理编码 + 路径规划。**可多次调用**以覆盖多段行程（如「东站→景区」「景区→酒店」「酒店→机场」）。origin/destination 可为城市名、区县或具体 POI。mode：同城优先 transit；短距离可 walking；跨城或枢纽间若 transit 空则工具会驾车回退并在 note 中说明。若起终点**过长**导致高德 OVER_DIRECTION_RANGE，工具会自动给出**粗估距离/耗时**（大圆+系数）并提示查铁路/航班，不会卡死。**distanceMeters/durationSeconds 为估算**，公交细节以当地为准，跨城勿当作铁路时刻。",
+    "高德 Web 地理编码 + 路径规划。**适用**：同城 POI 间 walking/transit/driving 短距离接驳耗时粗估；origin/destination 须「城市+具体 POI」（如「深圳市南山区深圳湾公园南门」）。**不适用**：高铁枢纽间班次/时刻、12306 票价、站内换乘通道细节、步行 <500m 站内动线、跨城公交方案。跨城长距离仅作驾车尺度参考；跨城+transit 会被拒绝。地理编码会带 city 消歧并校验同城 OD 距离。",
   argsSchema: routeArgs,
   async execute(args, _ctx: ToolContext): Promise<ToolResult<any>> {
     const key = process.env.AMAP_WEBSERVICE_KEY;
@@ -488,8 +601,38 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
         ok: false,
         error: {
           code: "AMAP_GEOCODE",
-          message: `无法将起终点解析为坐标（请换更具体的地址或城市名）。origin=${args.origin} destination=${args.destination}`,
+          message: `无法将起终点解析为坐标。请使用「城市+具体 POI」格式（如「深圳市深圳北站」「深圳市南山区深圳湾公园南门」）。origin=${args.origin} destination=${args.destination}`,
           retryable: true,
+        },
+      };
+    }
+
+    const geocodeMismatch = validateGeocodePair(args.origin, args.destination, originPt, destPt);
+    if (geocodeMismatch) {
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_GEOCODE_MISMATCH",
+          message: geocodeMismatch,
+          retryable: true,
+        },
+      };
+    }
+
+    const straightKm =
+      haversineMeters(originPt.lng, originPt.lat, destPt.lng, destPt.lat) / 1000;
+    const crossCityByAdcode =
+      originPt.adcode &&
+      destPt.adcode &&
+      String(originPt.adcode).slice(0, 4) !== String(destPt.adcode).slice(0, 4);
+
+    if (args.mode === "transit" && (crossCityByAdcode || straightKm > 50)) {
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_TRANSIT_CROSS_CITY",
+          message: `跨城或 >50km 距离禁止使用 mode=transit（${args.origin}→${args.destination}，直线约 ${straightKm.toFixed(0)} km）。铁路/高铁请文字说明并提示 12306；若仅需驾车尺度参考请改用 mode=driving。`,
+          retryable: false,
         },
       };
     }
@@ -655,10 +798,7 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
     let distance = parsed.distance != null ? String(parsed.distance) : undefined;
     let duration = parsed.duration != null ? String(parsed.duration) : undefined;
 
-    const crossCity =
-      originPt.adcode &&
-      destPt.adcode &&
-      String(originPt.adcode).slice(0, 4) !== String(destPt.adcode).slice(0, 4);
+    const crossCity = crossCityByAdcode;
 
     if (
       args.mode === "transit" &&
@@ -726,14 +866,20 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
         destination: args.destination,
         originResolved: originCoord,
         destinationResolved: destCoord,
+        originFormattedAddress: originPt.formattedAddress,
+        destinationFormattedAddress: destPt.formattedAddress,
         distanceMeters,
         durationSeconds,
         distanceKm,
         durationMinutes,
         durationHuman,
         tollsYuan,
-        crossCityHint: crossCity ? "起终点行政区不同：若为跨城长距离，驾车/路网耗时与高铁直达不同，请以铁路售票为准。" : undefined,
+        transitAvailable: usedMode === "transit",
+        crossCityHint: crossCity
+          ? "起终点行政区不同：若为跨城长距离，驾车/路网耗时与高铁直达不同，请以铁路售票为准。"
+          : undefined,
         note: noteExtra || "OK",
+        doNotRetrySameArgs: false,
       },
     };
   },

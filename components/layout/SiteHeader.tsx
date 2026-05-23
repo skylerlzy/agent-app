@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Plane } from "lucide-react";
+import { Plane, Settings } from "lucide-react";
 
 export interface SiteHeaderProps {
   className?: string;
@@ -46,6 +46,18 @@ export function SiteHeader({ className }: SiteHeaderProps) {
             <div className="h-9 w-24 animate-pulse rounded-lg bg-muted/60" aria-hidden />
           ) : isSignedIn && user ? (
             <>
+              <Link
+                href="/settings/skills"
+                className={cn(
+                  "hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors sm:inline-flex",
+                  pathname.startsWith("/settings")
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                )}
+              >
+                <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
+                设置
+              </Link>
               <span className="hidden max-w-[10rem] truncate text-xs text-muted-foreground sm:inline">
                 {user.primaryEmailAddress?.emailAddress ?? user.username ?? "已登录"}
               </span>

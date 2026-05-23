@@ -8,6 +8,7 @@ import { AgentRunSummary } from "@/components/agent/AgentRunSummary";
 import { ChatMessageList } from "@/components/agent/ChatMessageList";
 import { ConversationList } from "@/components/agent/ConversationList";
 import { TripPreferencesPanel } from "@/components/agent/TripPreferencesPanel";
+import { SkillPicker } from "@/components/agent/SkillPicker";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -149,6 +150,18 @@ export function AgentWorkspace() {
     [activeId, updateConversation]
   );
 
+  const handleSkillIdsChange = useCallback(
+    (activeSkillIds: string[]) => {
+      if (!activeId) return;
+      updateConversation(activeId, (c) => ({
+        ...c,
+        activeSkillIds,
+        updatedAt: Date.now(),
+      }));
+    },
+    [activeId, updateConversation]
+  );
+
   /** 运行结束后将轨迹与摘要写回对应对话 */
   useEffect(() => {
     if (!activeSessionId || !liveEvents?.length) return;
@@ -241,6 +254,7 @@ export function AgentWorkspace() {
       goalRaw: text,
       slots: undefined,
       preferences,
+      activeSkillIds: activeConversation.activeSkillIds ?? [],
     }).catch((e) => {
       if (finishedSessionsRef.current.has(sessionId)) return;
       const msg = e instanceof Error ? e.message : String(e);
@@ -312,11 +326,18 @@ export function AgentWorkspace() {
 
           <div className="shrink-0 space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
             {activeConversation ? (
-              <TripPreferencesPanel
-                preferences={activeConversation.preferences}
-                onChange={handlePreferencesChange}
-                disabled={loading}
-              />
+              <>
+                <SkillPicker
+                  selectedIds={activeConversation.activeSkillIds ?? []}
+                  onChange={handleSkillIdsChange}
+                  disabled={loading}
+                />
+                <TripPreferencesPanel
+                  preferences={activeConversation.preferences}
+                  onChange={handlePreferencesChange}
+                  disabled={loading}
+                />
+              </>
             ) : null}
 
             {runError ? (
