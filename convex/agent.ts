@@ -9,7 +9,16 @@ import {
 import { internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
-import type { AgentRunInput, ITraceSink, ReasoningEvent, UserGoal } from "../lib/agent/contracts";
+import type {
+  AgentRunInput,
+  AgentRunMode,
+  ChatMessage,
+  ITraceSink,
+  ReasoningEvent,
+  TripPreferences,
+  UserGoal,
+} from "../lib/agent/contracts";
+import { ConversationContextBuilder } from "../lib/agent/conversation/ConversationContextBuilder";
 import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
 
 const runSlotsValidator = v.optional(
@@ -48,9 +57,12 @@ const runPreferencesValidator = v.optional(
 type RunBody = {
   sessionId: string;
   goalRaw: string;
+  conversationId?: string;
   slots?: UserGoal["slots"];
   preferences?: AgentRunInput["context"]["preferences"];
   activeSkillIds?: string[];
+  runMode?: AgentRunInput["runMode"];
+  enabledToolNames?: AgentRunInput["enabledToolNames"];
 };
 
 function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
@@ -71,6 +83,7 @@ function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
 
   return {
     sessionId: args.sessionId,
+    conversationId: args.conversationId,
     goal: {
       rawText: args.goalRaw,
       slots: slotsOut,
@@ -79,8 +92,64 @@ function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
       userId,
       preferences: pref,
     },
+    runMode: args.runMode,
+    contextBundle: {
+      longTermMemories: [],
+      ragChunks: [],
+    },
     activeSkillIds: args.activeSkillIds ?? [],
+    enabledToolNames: args.enabledToolNames,
   };
+}
+
+const runModeValidator = v.optional(
+  v.union(v.literal("full_plan_execute"), v.literal("incremental_revise"), v.literal("quick_reply"))
+);
+
+function sortByCreatedAt<T extends { createdAt: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+async function loadConversationMessages(ctx: GenericActionCtx<DataModel>, conversationId: string) {
+  const rows = await ctx.db
+    .query("messages")
+    .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+    .collect();
+  return sortByCreatedAt(rows);
+}
+
+async function buildAgentInputForConversation(args: {
+  ctx: GenericActionCtx<DataModel>;
+  conversationId: string;
+  userId: string;
+  userMessageId: string;
+  preferences: TripPreferences;
+  activeSkillIds?: string[];
+  enabledToolNames?: string[];
+  runMode?: AgentRunMode;
+}) {
+  const allMessages = await loadConversationMessages(args.ctx, args.conversationId);
+  const currentIndex = allMessages.findIndex((row) => row._id === args.userMessageId);
+  if (currentIndex < 0) {
+    throw new Error("无法找到当前用户消息，请刷新页面后重试。");
+  }
+  const historyRows = allMessages.slice(0, currentIndex);
+  const history: ChatMessage[] = historyRows.map((row) => ({
+    role: row.role === "assistant" ? "assistant" : "user",
+    content: row.content,
+  }));
+
+  const userMessage = allMessages[currentIndex];
+  return new ConversationContextBuilder().buildRunInput({
+    userId: args.userId,
+    conversationId: args.conversationId,
+    userMessage: userMessage.content,
+    preferences: args.preferences,
+    history,
+    runMode: args.runMode,
+    activeSkillIds: args.activeSkillIds,
+    enabledToolNames: args.enabledToolNames,
+  });
 }
 
 async function enrichInputWithSkills(
@@ -168,12 +237,20 @@ export const createSession = internalMutation({
   args: {
     sessionId: v.string(),
     userId: v.string(),
+    conversationId: v.optional(v.string()),
+    runMode: v.optional(
+      v.union(v.literal("full_plan_execute"), v.literal("incremental_revise"), v.literal("quick_reply"))
+    ),
+    messageId: v.optional(v.string()),
     goalText: v.string(),
   },
-  async handler(ctx, { sessionId, userId, goalText }) {
+  async handler(ctx, { sessionId, userId, conversationId, runMode, messageId, goalText }) {
     await ctx.db.insert("agentSessions", {
       sessionId,
       userId,
+      conversationId,
+      runMode,
+      messageId,
       status: "running",
       goalText,
       createdAt: Date.now(),
@@ -240,9 +317,12 @@ export const runAgent = action({
   args: {
     sessionId: v.string(),
     goalRaw: v.string(),
+    conversationId: v.optional(v.string()),
+    runMode: runModeValidator,
     slots: runSlotsValidator,
     preferences: runPreferencesValidator,
     activeSkillIds: activeSkillIdsValidator,
+    enabledToolNames: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -268,6 +348,109 @@ export const runAgent = action({
 
     const input = buildAgentInput(args, identity.subject);
     await executeAgentPipeline(ctx, input, args.goalRaw, identity.subject, traceSink);
+
+    return { sessionId: args.sessionId };
+  },
+});
+
+export const runAgentInConversation = action({
+  args: {
+    sessionId: v.string(),
+    conversationId: v.id("conversations"),
+    userMessageId: v.id("messages"),
+    assistantMessageId: v.id("messages"),
+    runMode: runModeValidator,
+    preferences: runPreferencesValidator,
+    activeSkillIds: activeSkillIdsValidator,
+    enabledToolNames: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("未登录：请先通过 Clerk 登录后再运行 Agent。");
+    }
+
+    const existing = await ctx.runQuery(internal.agent.getSessionById, {
+      sessionId: args.sessionId,
+    });
+    if (existing) {
+      throw new Error("该 sessionId 已存在，请刷新页面后重试。");
+    }
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation || conversation.userId !== identity.subject) {
+      throw new Error("对话不存在或无权访问。");
+    }
+
+    const userMessageRow = await ctx.db.get(args.userMessageId);
+    if (!userMessageRow || userMessageRow.conversationId !== args.conversationId || userMessageRow.role !== "user") {
+      throw new Error("无法找到当前用户消息或消息类型错误。");
+    }
+
+    const assistantMessageRow = await ctx.db.get(args.assistantMessageId);
+    if (
+      !assistantMessageRow ||
+      assistantMessageRow.conversationId !== args.conversationId ||
+      assistantMessageRow.role !== "assistant"
+    ) {
+      throw new Error("无法找到用于回应的助手消息。");
+    }
+
+    const input = await buildAgentInputForConversation({
+      ctx,
+      conversationId: args.conversationId,
+      userId: identity.subject,
+      userMessageId: args.userMessageId,
+      preferences: args.preferences ?? {},
+      activeSkillIds: args.activeSkillIds,
+      enabledToolNames: args.enabledToolNames,
+      runMode: args.runMode,
+    });
+
+    const events: ReasoningEvent[] = [];
+    const traceSink: ITraceSink = {
+      emit: async (event: ReasoningEvent) => {
+        events.push(event);
+        await ctx.runMutation(internal.agent.appendTraceEvent, {
+          sessionId: args.sessionId,
+          eventJson: JSON.stringify(event),
+        });
+      },
+    };
+
+    await ctx.runMutation(internal.agent.createSession, {
+      sessionId: args.sessionId,
+      userId: identity.subject,
+      conversationId: args.conversationId,
+      runMode: args.runMode,
+      messageId: args.assistantMessageId,
+      goalText: userMessageRow.content,
+    });
+
+    try {
+      await executeAgentPipeline(ctx, input, userMessageRow.content, identity.subject, traceSink);
+      await ctx.runMutation(internal.agent.setSessionStatus, {
+        sessionId: args.sessionId,
+        status: "done",
+      });
+    } catch (e) {
+      await ctx.runMutation(internal.agent.setSessionStatus, {
+        sessionId: args.sessionId,
+        status: "error",
+      });
+      if (e instanceof ConvexError) throw e;
+      const message = e instanceof Error ? e.message : String(e);
+      throw new ConvexError(message);
+    }
+
+    const summary = summarizeFromEvents(events);
+    if (summary) {
+      await ctx.db.patch(args.assistantMessageId, { content: summary });
+      await ctx.db.patch(args.conversationId, {
+        summary,
+        updatedAt: Date.now(),
+      });
+    }
 
     return { sessionId: args.sessionId };
   },

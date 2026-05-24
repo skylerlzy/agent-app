@@ -2,9 +2,35 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  conversations: defineTable({
+    userId: v.string(),
+    title: v.string(),
+    summary: v.optional(v.string()),
+    sharedKnowledgeEnabled: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_title", ["title"]),
+
+  messages: defineTable({
+    conversationId: v.string(),
+    role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
+    content: v.string(),
+    runSessionId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_conversation_createdAt", ["conversationId", "createdAt"]),
+
   agentSessions: defineTable({
     sessionId: v.string(),
     userId: v.string(),
+    conversationId: v.optional(v.string()),
+    runMode: v.optional(
+      v.union(v.literal("full_plan_execute"), v.literal("incremental_revise"), v.literal("quick_reply"))
+    ),
+    messageId: v.optional(v.string()),
     status: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     goalText: v.string(),
     createdAt: v.number(),

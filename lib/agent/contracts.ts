@@ -235,16 +235,76 @@ export interface ISkillRegistry {
   }): Promise<string[]>;
 }
 
+export type AgentRunMode =
+  | "full_plan_execute"
+  | "incremental_revise"
+  | "quick_reply";
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  runSessionId?: string;
+  createdAt: number;
+}
+
+export interface UserMemory {
+  id: string;
+  userId: string;
+  kind: "preference" | "fact" | "constraint" | "other";
+  content: string;
+  sourceConversationId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KnowledgeChunk {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
+  content: string;
+  citation: string;
+  score: number;
+}
+
+export interface AgentContextBundle {
+  conversationSummary?: string;
+  workingMemory?: string;
+  longTermMemories: UserMemory[];
+  ragChunks: KnowledgeChunk[];
+  estimatedTokens?: number;
+}
+
+export interface IConversationContextBuilder {
+  buildRunInput(input: {
+    userId: string;
+    conversationId: string;
+    userMessage: string;
+    preferences: TripPreferences;
+    history?: ChatMessage[];
+    runMode?: AgentRunMode;
+    activeSkillIds?: string[];
+    enabledToolNames?: ToolName[];
+  }): Promise<AgentRunInput>;
+}
+
 // ---------------------------------------------------------------------------
 // Agent 运行入口
 // ---------------------------------------------------------------------------
 
 export interface AgentRunInput {
   sessionId: string;
+  conversationId?: string;
   goal: UserGoal;
   context: UserContext;
+  history?: ChatMessage[];
+  runMode?: AgentRunMode;
+  contextBundle?: AgentContextBundle;
   /** 迭代三：本轮激活的 skill id 列表（评测不传时默认 []） */
   activeSkillIds?: string[];
+  /** 迭代三：用户显式开启的工具名列表 */
+  enabledToolNames?: ToolName[];
   /** 迭代三：由 action 解析后注入 LLM 的 Skill system 段 */
   skillSystemSection?: string;
 }
