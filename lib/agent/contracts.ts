@@ -152,6 +152,7 @@ export interface ReactTurn {
 
 export type ReasoningEventType =
   | "session_start"
+  | "run_mode"
   | "plan_draft"
   | "plan_final"
   | "react_thought"
@@ -172,6 +173,7 @@ export interface ReasoningEventBase {
 
 export type ReasoningEvent =
   | (ReasoningEventBase & { type: "session_start"; payload: { goal: string } })
+  | (ReasoningEventBase & { type: "run_mode"; payload: { mode: AgentRunMode } })
   | (ReasoningEventBase & { type: "plan_draft"; payload: { plan: ExecutionPlan } })
   | (ReasoningEventBase & { type: "plan_final"; payload: { plan: ExecutionPlan } })
   | (ReasoningEventBase & { type: "react_thought"; payload: ReactTurn })
@@ -193,7 +195,10 @@ export type ReasoningEvent =
       payload: { stepId: string; diagnosis: string; nextAction: "retry" | "skip" | "abort" };
     })
   | (ReasoningEventBase & { type: "step_done"; payload: { stepId: string } })
-  | (ReasoningEventBase & { type: "run_done"; payload: { summary: string } })
+  | (ReasoningEventBase & {
+      type: "run_done";
+      payload: { summary: string; updatesMasterPlan?: boolean };
+    })
   | (ReasoningEventBase & { type: "run_error"; payload: { message: string } });
 
 // ---------------------------------------------------------------------------
@@ -278,11 +283,13 @@ export interface AgentContextBundle {
 
 export interface IConversationContextBuilder {
   buildRunInput(input: {
+    sessionId: string;
     userId: string;
     conversationId: string;
     userMessage: string;
     preferences: TripPreferences;
     history?: ChatMessage[];
+    conversationSummary?: string;
     runMode?: AgentRunMode;
     activeSkillIds?: string[];
     enabledToolNames?: ToolName[];

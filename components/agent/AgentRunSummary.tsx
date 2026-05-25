@@ -9,7 +9,11 @@ import { MapPinned, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 
 export interface AgentRunSummaryProps {
-  events: ReasoningEvent[];
+  /** 优先展示：对话级全程行程 Markdown（不随复述类 quick 回复变化） */
+  markdown?: string;
+  /** 运行中轨迹（仅用于「正在更新」提示，不覆盖 markdown） */
+  events?: ReasoningEvent[];
+  isUpdating?: boolean;
   className?: string;
 }
 
@@ -34,11 +38,14 @@ function splitMarkdownSections(md: string): { title: string; body: string }[] {
     .filter((x): x is { title: string; body: string } => x != null && (x.title.length > 0 || x.body.length > 0));
 }
 
-export function AgentRunSummary({ events, className }: AgentRunSummaryProps) {
+export function AgentRunSummary({ markdown, events = [], isUpdating, className }: AgentRunSummaryProps) {
   const { summary, thoughts, sections } = useMemo(() => {
+    const fromProp = markdown?.trim() ?? "";
     const runDone = [...events].reverse().find((e) => e.type === "run_done");
-    const summaryText =
+    const fromEvents =
       runDone && runDone.type === "run_done" ? String(runDone.payload.summary ?? "").trim() : "";
+
+    const summaryText = fromProp || fromEvents;
 
     const thoughts = events
       .filter((e): e is Extract<ReasoningEvent, { type: "react_thought" }> => e.type === "react_thought")
@@ -48,9 +55,9 @@ export function AgentRunSummary({ events, className }: AgentRunSummaryProps) {
     const sections = summaryText.includes("##") ? splitMarkdownSections(summaryText) : [];
 
     return { summary: summaryText, thoughts, sections };
-  }, [events]);
+  }, [markdown, events]);
 
-  if (!summary && thoughts.length === 0) {
+  if (!summary && thoughts.length === 0 && !isUpdating) {
     return null;
   }
 
@@ -68,9 +75,11 @@ export function AgentRunSummary({ events, className }: AgentRunSummaryProps) {
             <MapPinned className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div>
-            <CardTitle className="text-xl font-bold tracking-tight text-foreground">出行方案</CardTitle>
+            <CardTitle className="text-xl font-bold tracking-tight text-foreground">全程出行方案</CardTitle>
             <CardDescription className="text-[13px] leading-snug text-muted-foreground">
-              由规划、工具观测与总结生成；以下为 Markdown 排版。景点与日程供参考，开放时间与票价以官方为准，铁路以 12306 为准。
+              {isUpdating
+                ? "正在根据您的最新要求更新行程…"
+                : "展示本对话的完整行程；复述或简单问答不会改变此面板。"}
             </CardDescription>
           </div>
         </div>
@@ -102,7 +111,12 @@ export function AgentRunSummary({ events, className }: AgentRunSummaryProps) {
             </div>
           )
         ) : null}
-        {thoughts.length > 0 ? (
+        {!summary && !isUpdating ? (
+          <p className="text-xs text-muted-foreground">
+            完成首次规划后，完整多日行程将固定显示在此；景点与日程供参考，铁路以 12306 为准。
+          </p>
+        ) : null}
+        {thoughts.length > 0 && !markdown ? (
           <div className="space-y-3 rounded-2xl border border-border/50 bg-muted/20 p-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />

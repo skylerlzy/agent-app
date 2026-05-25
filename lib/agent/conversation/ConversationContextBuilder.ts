@@ -9,11 +9,13 @@ import type {
 } from "../contracts";
 
 export interface ConversationContextBuilderArgs {
+  sessionId: string;
   userId: string;
   conversationId: string;
   userMessage: string;
   preferences: TripPreferences;
   history?: ChatMessage[];
+  conversationSummary?: string;
   runMode?: AgentRunMode;
   activeSkillIds?: string[];
   enabledToolNames?: ToolName[];
@@ -25,12 +27,13 @@ export class ConversationContextBuilder implements IConversationContextBuilder {
   async buildRunInput(args: ConversationContextBuilderArgs): Promise<AgentRunInput> {
     const recentHistory = args.history ? args.history.slice(-this.maxHistoryMessages) : [];
     const contextBundle: AgentContextBundle = {
+      conversationSummary: args.conversationSummary,
       longTermMemories: [],
       ragChunks: [],
     };
 
     return {
-      sessionId: `conversation-${args.conversationId}-${Date.now()}`,
+      sessionId: args.sessionId,
       conversationId: args.conversationId,
       goal: {
         rawText: args.userMessage,
@@ -46,4 +49,20 @@ export class ConversationContextBuilder implements IConversationContextBuilder {
       enabledToolNames: args.enabledToolNames,
     };
   }
+}
+
+/** 供 action 调用的纯函数入口（实现 IConversationContextBuilder 契约） */
+export async function buildAgentRunInput(args: {
+  sessionId: string;
+  userId: string;
+  conversationId: string;
+  userMessage: string;
+  preferences: TripPreferences;
+  history?: ChatMessage[];
+  conversationSummary?: string;
+  runMode?: AgentRunMode;
+  activeSkillIds?: string[];
+  enabledToolNames?: ToolName[];
+}): Promise<AgentRunInput> {
+  return new ConversationContextBuilder().buildRunInput(args);
 }

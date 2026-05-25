@@ -1,14 +1,20 @@
 "use client";
 
-import type { LocalConversation } from "@/lib/conversationStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MessageSquarePlus, Pencil, Search, Trash2, X, Check } from "lucide-react";
 import { useMemo, useState } from "react";
 
+export interface ConversationListItem {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messageCount?: number;
+}
+
 export interface ConversationListProps {
-  conversations: LocalConversation[];
+  conversations: ConversationListItem[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
@@ -45,7 +51,7 @@ export function ConversationList({
     return sorted.filter((c) => c.title.toLowerCase().includes(q));
   }, [conversations, search]);
 
-  const startRename = (c: LocalConversation) => {
+  const startRename = (c: ConversationListItem) => {
     setEditingId(c.id);
     setEditTitle(c.title);
   };
@@ -136,7 +142,7 @@ export function ConversationList({
                         </p>
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
                           {formatRelativeTime(c.updatedAt)}
-                          {c.messages.length > 0 ? ` · ${c.messages.length} 条消息` : ""}
+                          {c.messageCount != null && c.messageCount > 0 ? ` · ${c.messageCount} 条消息` : ""}
                         </p>
                       </button>
                       <div className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

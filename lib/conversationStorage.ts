@@ -1,4 +1,4 @@
-import type { ReasoningEvent, TripPreferences } from "@/lib/agent/contracts";
+import type { ReasoningEvent, TripPreferences } from "../lib/agent/contracts";
 
 const STORAGE_KEY = "agent-app.conversations.v1";
 
@@ -130,4 +130,18 @@ export function autoTitleFromMessage(text: string): string {
   const t = text.trim().replace(/\s+/g, " ");
   if (!t) return "新对话";
   return t.length > 24 ? `${t.slice(0, 24)}…` : t;
+}
+
+export function parsePreferencesJson(json?: string | null): ConversationPreferences {
+  if (!json?.trim()) return defaultPreferences();
+  try {
+    const parsed = JSON.parse(json) as Partial<ConversationPreferences>;
+    return { ...defaultPreferences(), ...parsed };
+  } catch {
+    return defaultPreferences();
+  }
+}
+
+export function serializePreferencesJson(prefs: ConversationPreferences): string {
+  return JSON.stringify(prefs);
 }

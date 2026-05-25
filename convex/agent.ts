@@ -2,12 +2,13 @@ import { ConvexError, v } from "convex/values";
 import type { GenericActionCtx } from "convex/server";
 import {
   action,
+  internalAction,
   internalMutation,
   internalQuery,
   query,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
 import type {
   AgentRunInput,
@@ -18,8 +19,19 @@ import type {
   TripPreferences,
   UserGoal,
 } from "../lib/agent/contracts";
-import { ConversationContextBuilder } from "../lib/agent/conversation/ConversationContextBuilder";
+import { buildAgentRunInput } from "../lib/agent/conversation/ConversationContextBuilder";
+import {
+  buildWorkingMemoryWithTripPlan,
+  extractTripPlanFromHistory,
+  looksLikeFullItinerary,
+} from "../lib/agent/context/tripPlanMemory";
+import { decideRunMode } from "../lib/agent/orchestrator/RunModeRouter";
 import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
+import {
+  activeSkillIdsValidator,
+  runModeValidator,
+  runPreferencesValidator,
+} from "./runValidators";
 
 const runSlotsValidator = v.optional(
   v.object({
@@ -32,28 +44,6 @@ const runSlotsValidator = v.optional(
   })
 );
 
-const runPreferencesValidator = v.optional(
-  v.object({
-    tripStartDateIso: v.optional(v.string()),
-    tripEndDateIso: v.optional(v.string()),
-    dietaryNotes: v.optional(v.string()),
-    dietaryPreset: v.optional(
-      v.union(v.literal("none"), v.literal("vegetarian"), v.literal("halal"), v.literal("local"))
-    ),
-    pace: v.optional(v.union(v.literal("slow"), v.literal("balanced"), v.literal("fast"))),
-    accommodationType: v.optional(
-      v.union(v.literal("hotel"), v.literal("airbnb"), v.literal("hostel"), v.literal("camping"))
-    ),
-    travelThemes: v.optional(v.array(v.string())),
-    transportPreferences: v.optional(v.array(v.string())),
-    budgetCny: v.optional(v.number()),
-    additionalNotes: v.optional(v.string()),
-    travelParty: v.optional(
-      v.union(v.literal("solo"), v.literal("couple"), v.literal("family"), v.literal("group"))
-    ),
-  })
-);
-
 type RunBody = {
   sessionId: string;
   goalRaw: string;
@@ -62,7 +52,7 @@ type RunBody = {
   preferences?: AgentRunInput["context"]["preferences"];
   activeSkillIds?: string[];
   runMode?: AgentRunInput["runMode"];
-  enabledToolNames?: AgentRunInput["enabledToolNames"];
+  enabledToolNames?: string[];
 };
 
 function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
@@ -98,57 +88,63 @@ function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
       ragChunks: [],
     },
     activeSkillIds: args.activeSkillIds ?? [],
-    enabledToolNames: args.enabledToolNames,
+    enabledToolNames: args.enabledToolNames as AgentRunInput["enabledToolNames"],
   };
 }
 
-const runModeValidator = v.optional(
-  v.union(v.literal("full_plan_execute"), v.literal("incremental_revise"), v.literal("quick_reply"))
-);
-
-function sortByCreatedAt<T extends { createdAt: number }>(items: T[]) {
-  return [...items].sort((a, b) => a.createdAt - b.createdAt);
-}
-
-async function loadConversationMessages(ctx: GenericActionCtx<DataModel>, conversationId: string) {
-  const rows = await ctx.db
-    .query("messages")
-    .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
-    .collect();
-  return sortByCreatedAt(rows);
-}
+type SessionMeta = {
+  conversationId?: string;
+  runMode?: AgentRunMode;
+  messageId?: string;
+};
 
 async function buildAgentInputForConversation(args: {
   ctx: GenericActionCtx<DataModel>;
-  conversationId: string;
+  sessionId: string;
+  conversationId: Id<"conversations">;
   userId: string;
-  userMessageId: string;
+  userMessageId: Id<"messages">;
   preferences: TripPreferences;
   activeSkillIds?: string[];
   enabledToolNames?: string[];
   runMode?: AgentRunMode;
-}) {
-  const allMessages = await loadConversationMessages(args.ctx, args.conversationId);
-  const currentIndex = allMessages.findIndex((row) => row._id === args.userMessageId);
+}): Promise<AgentRunInput> {
+  const allMessages: Doc<"messages">[] = await args.ctx.runQuery(
+    internal.messages.listRowsForConversationInternal,
+    {
+      conversationId: args.conversationId,
+    }
+  );
+
+  const conversation = await args.ctx.runQuery(internal.conversations.getInternal, {
+    conversationId: args.conversationId,
+  });
+
+  const currentIndex = allMessages.findIndex((row: Doc<"messages">) => row._id === args.userMessageId);
   if (currentIndex < 0) {
     throw new Error("无法找到当前用户消息，请刷新页面后重试。");
   }
+
   const historyRows = allMessages.slice(0, currentIndex);
-  const history: ChatMessage[] = historyRows.map((row) => ({
-    role: row.role === "assistant" ? "assistant" : "user",
-    content: row.content,
-  }));
+  const history: ChatMessage[] = historyRows
+    .filter((row) => row.role === "user" || row.role === "assistant")
+    .map((row) => ({
+      role: row.role === "assistant" ? "assistant" : "user",
+      content: row.content,
+    }));
 
   const userMessage = allMessages[currentIndex];
-  return new ConversationContextBuilder().buildRunInput({
+  return buildAgentRunInput({
+    sessionId: args.sessionId,
     userId: args.userId,
     conversationId: args.conversationId,
     userMessage: userMessage.content,
     preferences: args.preferences,
     history,
+    conversationSummary: conversation?.summary,
     runMode: args.runMode,
     activeSkillIds: args.activeSkillIds,
-    enabledToolNames: args.enabledToolNames,
+    enabledToolNames: args.enabledToolNames as AgentRunInput["enabledToolNames"],
   });
 }
 
@@ -171,11 +167,20 @@ async function executeAgentPipeline(
   input: AgentRunInput,
   goalRaw: string,
   userId: string,
-  traceSink: ITraceSink
-): Promise<void> {
+  traceSink: ITraceSink,
+  sessionMeta?: SessionMeta
+): Promise<ReasoningEvent[]> {
+  const events: ReasoningEvent[] = [];
+  const sink: ITraceSink = {
+    emit: async (event: ReasoningEvent) => {
+      events.push(event);
+      await traceSink.emit(event);
+    },
+  };
+
   let pipeline;
   try {
-    pipeline = createAutonomousAgentPipeline(traceSink, {});
+    pipeline = createAutonomousAgentPipeline(sink, {});
   } catch (e) {
     if (e instanceof ConvexError) throw e;
     const message = e instanceof Error ? e.message : String(e);
@@ -188,6 +193,9 @@ async function executeAgentPipeline(
     sessionId: input.sessionId,
     userId,
     goalText: goalRaw,
+    conversationId: sessionMeta?.conversationId,
+    runMode: sessionMeta?.runMode,
+    messageId: sessionMeta?.messageId,
   });
 
   const enrichedInput = await enrichInputWithSkills(ctx, input, userId);
@@ -209,6 +217,8 @@ async function executeAgentPipeline(
     const message = e instanceof Error ? e.message : String(e);
     throw new ConvexError(message);
   }
+
+  return events;
 }
 
 function summarizeFromEvents(events: ReasoningEvent[]): string {
@@ -221,6 +231,165 @@ function summarizeFromEvents(events: ReasoningEvent[]): string {
     return done.payload.summary;
   }
   return "";
+}
+
+const runAgentInConversationArgs = {
+  sessionId: v.string(),
+  conversationId: v.id("conversations"),
+  userMessageId: v.id("messages"),
+  assistantMessageId: v.id("messages"),
+  runMode: runModeValidator,
+  preferences: runPreferencesValidator,
+  activeSkillIds: activeSkillIdsValidator,
+  enabledToolNames: v.optional(v.array(v.string())),
+};
+
+type RunAgentInConversationArgs = {
+  sessionId: string;
+  conversationId: Id<"conversations">;
+  userMessageId: Id<"messages">;
+  assistantMessageId: Id<"messages">;
+  runMode?: AgentRunMode;
+  preferences?: TripPreferences;
+  activeSkillIds?: string[];
+  enabledToolNames?: string[];
+};
+
+async function runAgentInConversationHandler(
+  ctx: GenericActionCtx<DataModel>,
+  args: RunAgentInConversationArgs,
+  userId: string
+): Promise<{ sessionId: string }> {
+  const existing = await ctx.runQuery(internal.agent.getSessionById, {
+    sessionId: args.sessionId,
+  });
+  if (existing) {
+    throw new Error("该 sessionId 已存在，请刷新页面后重试。");
+  }
+
+  const conversation = await ctx.runQuery(internal.conversations.getInternal, {
+    conversationId: args.conversationId,
+  });
+  if (!conversation || conversation.userId !== userId) {
+    throw new Error("对话不存在或无权访问。");
+  }
+
+  const userMessageRow = await ctx.runQuery(internal.messages.getMessageInternal, {
+    messageId: args.userMessageId,
+  });
+  if (
+    !userMessageRow ||
+    userMessageRow.conversationId !== args.conversationId ||
+    userMessageRow.role !== "user"
+  ) {
+    throw new Error("无法找到当前用户消息或消息类型错误。");
+  }
+
+  const assistantMessageRow = await ctx.runQuery(internal.messages.getMessageInternal, {
+    messageId: args.assistantMessageId,
+  });
+  if (
+    !assistantMessageRow ||
+    assistantMessageRow.conversationId !== args.conversationId ||
+    assistantMessageRow.role !== "assistant"
+  ) {
+    throw new Error("无法找到用于回应的助手消息。");
+  }
+
+  const input = await buildAgentInputForConversation({
+    ctx,
+    sessionId: args.sessionId,
+    conversationId: args.conversationId,
+    userId,
+    userMessageId: args.userMessageId,
+    preferences: args.preferences ?? {},
+    activeSkillIds: args.activeSkillIds,
+    enabledToolNames: args.enabledToolNames,
+    runMode: args.runMode,
+  });
+
+  const tripPlan =
+    conversation.tripPlanMarkdown?.trim() ||
+    extractTripPlanFromHistory(input.history) ||
+    "";
+
+  if (tripPlan) {
+    input.contextBundle = {
+      ...input.contextBundle,
+      longTermMemories: input.contextBundle?.longTermMemories ?? [],
+      ragChunks: input.contextBundle?.ragChunks ?? [],
+      workingMemory: buildWorkingMemoryWithTripPlan(tripPlan),
+    };
+    if (!conversation.tripPlanMarkdown?.trim()) {
+      await ctx.runMutation(internal.conversations.patchTripPlanInternal, {
+        conversationId: args.conversationId,
+        tripPlanMarkdown: tripPlan,
+      });
+    }
+  }
+
+  const resolvedMode =
+    args.runMode ??
+    decideRunMode({
+      goalText: userMessageRow.content,
+      history: input.history ?? [],
+      hasExistingPlan: Boolean(tripPlan),
+    });
+  input.runMode = resolvedMode;
+
+  const traceSink: ITraceSink = {
+    emit: async (event: ReasoningEvent) => {
+      await ctx.runMutation(internal.agent.appendTraceEvent, {
+        sessionId: args.sessionId,
+        eventJson: JSON.stringify(event),
+      });
+    },
+  };
+
+  const events = await executeAgentPipeline(
+    ctx,
+    input,
+    userMessageRow.content,
+    userId,
+    traceSink,
+    {
+      conversationId: args.conversationId,
+      runMode: resolvedMode,
+      messageId: args.assistantMessageId,
+    }
+  );
+
+  const summary = summarizeFromEvents(events);
+  const runDone = [...events].reverse().find((e) => e.type === "run_done");
+  const updatesMasterPlan =
+    runDone?.type === "run_done" ? runDone.payload.updatesMasterPlan : undefined;
+
+  if (summary) {
+    await ctx.runMutation(internal.messages.patchMessageContentInternal, {
+      messageId: args.assistantMessageId,
+      content: summary,
+    });
+
+    if (resolvedMode === "quick_reply") {
+      /* 复述/问答：不覆盖全程方案与对话级摘要 */
+    } else if (updatesMasterPlan !== false && looksLikeFullItinerary(summary)) {
+      await ctx.runMutation(internal.conversations.patchTripPlanInternal, {
+        conversationId: args.conversationId,
+        tripPlanMarkdown: summary,
+      });
+      await ctx.runMutation(internal.conversations.patchSummaryInternal, {
+        conversationId: args.conversationId,
+        summary: summary.slice(0, 2000),
+      });
+    } else {
+      await ctx.runMutation(internal.conversations.patchSummaryInternal, {
+        conversationId: args.conversationId,
+        summary: summary.slice(0, 2000),
+      });
+    }
+  }
+
+  return { sessionId: args.sessionId };
 }
 
 export const getSessionById = internalQuery({
@@ -311,7 +480,34 @@ export const listTraceEvents = query({
   },
 });
 
-const activeSkillIdsValidator = v.optional(v.array(v.string()));
+/** 由 messages.sendUserMessage 调度；无需 Clerk（mutation 已鉴权） */
+export const runAgentInConversationInternal = internalAction({
+  args: runAgentInConversationArgs,
+  handler: async (ctx, args): Promise<{ sessionId: string }> => {
+    const conversation: Doc<"conversations"> | null = await ctx.runQuery(
+      internal.conversations.getInternal,
+      {
+        conversationId: args.conversationId,
+      }
+    );
+    if (!conversation) {
+      throw new Error("对话不存在。");
+    }
+    return runAgentInConversationHandler(ctx, args, conversation.userId);
+  },
+});
+
+/** 对话续聊主入口（也可由前端直接调用，与 sendUserMessage 二选一） */
+export const runAgentInConversation = action({
+  args: runAgentInConversationArgs,
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("未登录：请先通过 Clerk 登录后再运行 Agent。");
+    }
+    return runAgentInConversationHandler(ctx, args, identity.subject);
+  },
+});
 
 export const runAgent = action({
   args: {
@@ -353,115 +549,11 @@ export const runAgent = action({
   },
 });
 
-export const runAgentInConversation = action({
-  args: {
-    sessionId: v.string(),
-    conversationId: v.id("conversations"),
-    userMessageId: v.id("messages"),
-    assistantMessageId: v.id("messages"),
-    runMode: runModeValidator,
-    preferences: runPreferencesValidator,
-    activeSkillIds: activeSkillIdsValidator,
-    enabledToolNames: v.optional(v.array(v.string())),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("未登录：请先通过 Clerk 登录后再运行 Agent。");
-    }
-
-    const existing = await ctx.runQuery(internal.agent.getSessionById, {
-      sessionId: args.sessionId,
-    });
-    if (existing) {
-      throw new Error("该 sessionId 已存在，请刷新页面后重试。");
-    }
-
-    const conversation = await ctx.db.get(args.conversationId);
-    if (!conversation || conversation.userId !== identity.subject) {
-      throw new Error("对话不存在或无权访问。");
-    }
-
-    const userMessageRow = await ctx.db.get(args.userMessageId);
-    if (!userMessageRow || userMessageRow.conversationId !== args.conversationId || userMessageRow.role !== "user") {
-      throw new Error("无法找到当前用户消息或消息类型错误。");
-    }
-
-    const assistantMessageRow = await ctx.db.get(args.assistantMessageId);
-    if (
-      !assistantMessageRow ||
-      assistantMessageRow.conversationId !== args.conversationId ||
-      assistantMessageRow.role !== "assistant"
-    ) {
-      throw new Error("无法找到用于回应的助手消息。");
-    }
-
-    const input = await buildAgentInputForConversation({
-      ctx,
-      conversationId: args.conversationId,
-      userId: identity.subject,
-      userMessageId: args.userMessageId,
-      preferences: args.preferences ?? {},
-      activeSkillIds: args.activeSkillIds,
-      enabledToolNames: args.enabledToolNames,
-      runMode: args.runMode,
-    });
-
-    const events: ReasoningEvent[] = [];
-    const traceSink: ITraceSink = {
-      emit: async (event: ReasoningEvent) => {
-        events.push(event);
-        await ctx.runMutation(internal.agent.appendTraceEvent, {
-          sessionId: args.sessionId,
-          eventJson: JSON.stringify(event),
-        });
-      },
-    };
-
-    await ctx.runMutation(internal.agent.createSession, {
-      sessionId: args.sessionId,
-      userId: identity.subject,
-      conversationId: args.conversationId,
-      runMode: args.runMode,
-      messageId: args.assistantMessageId,
-      goalText: userMessageRow.content,
-    });
-
-    try {
-      await executeAgentPipeline(ctx, input, userMessageRow.content, identity.subject, traceSink);
-      await ctx.runMutation(internal.agent.setSessionStatus, {
-        sessionId: args.sessionId,
-        status: "done",
-      });
-    } catch (e) {
-      await ctx.runMutation(internal.agent.setSessionStatus, {
-        sessionId: args.sessionId,
-        status: "error",
-      });
-      if (e instanceof ConvexError) throw e;
-      const message = e instanceof Error ? e.message : String(e);
-      throw new ConvexError(message);
-    }
-
-    const summary = summarizeFromEvents(events);
-    if (summary) {
-      await ctx.db.patch(args.assistantMessageId, { content: summary });
-      await ctx.db.patch(args.conversationId, {
-        summary,
-        updatedAt: Date.now(),
-      });
-    }
-
-    return { sessionId: args.sessionId };
-  },
-});
-
 function convexEvalPublicMode(): boolean {
   const v = process.env.EVAL_PUBLIC_EVAL?.trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** 去掉 CR、BOM、首尾空白；若整段被一对引号包住则剥掉（Dashboard 误粘贴常带引号） */
 function rawCleanEvalSecret(s: string): string {
   let t = (s ?? "").replace(/\r/g, "").replace(/^\uFEFF/, "").trim();
   if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
@@ -476,10 +568,6 @@ function normEvalSecret(s: string): string {
 
 const EVAL_PUBLIC_PLACEHOLDER = "__eval_public__";
 
-/**
- * 供评测平台（HTTP 网关）在无 Clerk 会话下触发一次完整运行。
- * 默认需在 Convex 配置 EVAL_SERVER_SECRET；EVAL_PUBLIC_EVAL=true 时改为占位密钥联调（勿用于公网）。
- */
 export const runAgentEval = action({
   args: {
     evalSecret: v.string(),

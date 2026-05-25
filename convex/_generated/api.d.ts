@@ -9,6 +9,10 @@
  */
 
 import type * as agent from "../agent.js";
+import type * as authHelpers from "../authHelpers.js";
+import type * as conversations from "../conversations.js";
+import type * as messages from "../messages.js";
+import type * as runValidators from "../runValidators.js";
 import type * as skills from "../skills.js";
 
 import type {
@@ -19,6 +23,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
+  authHelpers: typeof authHelpers;
+  conversations: typeof conversations;
+  messages: typeof messages;
+  runValidators: typeof runValidators;
   skills: typeof skills;
 }>;
 

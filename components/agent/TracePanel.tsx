@@ -17,9 +17,14 @@ export interface TracePanelProps {
   variant?: "full" | "peek";
 }
 
+function eventKey(e: ReasoningEvent, index: number): string {
+  return `${e.sessionId}-${e.seq}-${e.type}-${e.ts}-${index}`;
+}
+
 function eventAccentClass(type: ReasoningEvent["type"]): string {
   const map: Record<string, string> = {
     session_start: "border-l-sky-500/70 bg-sky-50/90",
+    run_mode: "border-l-indigo-500/60 bg-indigo-50/92",
     plan_draft: "border-l-amber-500/65 bg-amber-50/95",
     plan_final: "border-l-amber-600/55 bg-amber-50/90",
     react_thought: "border-l-teal-600/55 bg-teal-50/92",
@@ -37,6 +42,7 @@ function eventAccentClass(type: ReasoningEvent["type"]): string {
 function typeLabel(type: ReasoningEvent["type"]): string {
   const labels: Record<string, string> = {
     session_start: "会话",
+    run_mode: "运行模式",
     plan_draft: "规划初稿",
     plan_final: "规划定稿",
     react_thought: "ReAct 思考",
@@ -113,6 +119,12 @@ function EventBody({ e }: { e: ReasoningEvent }) {
             <span className="font-medium text-foreground">目标</span> {e.payload.goal}
           </p>
         </div>
+      );
+    case "run_mode":
+      return (
+        <p className="font-mono text-xs text-foreground sm:text-sm">
+          {JSON.stringify(e.payload, null, 2)}
+        </p>
       );
     case "plan_draft":
       return <PlanBody plan={e.payload.plan} variant="draft" />;
@@ -199,9 +211,9 @@ function buildPeekEvents(events: ReasoningEvent[]): ReasoningEvent[] {
     if (!lastReflex && e.type === "reflexion") lastReflex = e;
     if (!lastStep && e.type === "step_done") lastStep = e;
   }
-  const set = new Map<number, ReasoningEvent>();
+  const set = new Map<string, ReasoningEvent>();
   for (const e of [lastThought, lastCall, lastResult, lastReflex, lastStep]) {
-    if (e) set.set(e.seq, e);
+    if (e) set.set(eventKey(e, e.seq), e);
   }
   return [...set.values()].sort((a, b) => a.seq - b.seq);
 }
@@ -209,9 +221,9 @@ function buildPeekEvents(events: ReasoningEvent[]): ReasoningEvent[] {
 function TraceEventCards({ events, className }: { events: ReasoningEvent[]; className?: string }) {
   return (
     <div className={cn("space-y-3", className)} role="log" aria-live="polite">
-      {events.map((e) => (
+      {events.map((e, index) => (
         <Card
-          key={e.seq}
+          key={eventKey(e, index)}
           className={cn(
             "border border-border/60 border-l-[3px] bg-background/60 p-3 shadow-sm transition-all duration-300 ease-soft hover:border-border",
             eventAccentClass(e.type)

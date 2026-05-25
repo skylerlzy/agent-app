@@ -1,5 +1,6 @@
 import type { AgentRunInput, ExecutionPlan, ILLMClient, ToolName } from "../contracts";
 import { appendSkillSection } from "../skills/appendSkillSection";
+import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 
 function flattenSteps(plan: ExecutionPlan) {
   return plan.phases.flatMap((phase) => phase.steps ?? []);
@@ -94,7 +95,12 @@ export async function synthesizeTravelMarkdown(
     input.skillSystemSection
   );
 
-  const user = `【用户目标】\n${input.goal.rawText}\n\n【结构化槽位】\n${JSON.stringify(input.goal.slots ?? {}, null, 2)}\n\n【用户偏好】\n${JSON.stringify(input.context.preferences, null, 2)}\n\n【执行计划】\n${planBrief}\n\n【工具观测数据】\n${toolsBlock}`;
+  const historyBlock = formatHistoryForPrompt(
+    input.history,
+    input.contextBundle?.conversationSummary
+  );
+
+  const user = `${historyBlock}【用户目标】\n${input.goal.rawText}\n\n【结构化槽位】\n${JSON.stringify(input.goal.slots ?? {}, null, 2)}\n\n【用户偏好】\n${JSON.stringify(input.context.preferences, null, 2)}\n\n【执行计划】\n${planBrief}\n\n【工具观测数据】\n${toolsBlock}${historyBlock ? "\n\n【多轮说明】回答须与「近期对话」中的约束一致（如预算、节奏、忌口）；若用户在本轮修订了部分内容，在摘要中明确变更点并保留未改部分。" : ""}`;
 
   const text = await llm.complete(
     [

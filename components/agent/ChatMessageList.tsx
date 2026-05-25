@@ -6,6 +6,8 @@ import { ReasoningPipeline } from "@/components/agent/ReasoningPipeline";
 import { TracePanel } from "@/components/agent/TracePanel";
 import { MarkdownTravelBody } from "@/components/agent/MarkdownTravelBody";
 import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Bot, ChevronDown, ChevronUp, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -30,12 +32,18 @@ function AssistantBubble({
 }) {
   const [traceOpen, setTraceOpen] = useState(false);
   const showRunning = message.status === "running" || message.status === "pending";
+  const fetchedTrace = useQuery(
+    api.agent.listTraceEvents,
+    traceOpen && message.sessionId && !showRunning ? { sessionId: message.sessionId } : "skip"
+  );
   const events =
     showRunning && liveEvents?.length
       ? liveEvents
       : message.traceEvents?.length
         ? message.traceEvents
-        : liveEvents ?? [];
+        : fetchedTrace?.length
+          ? fetchedTrace
+          : liveEvents ?? [];
 
   const hasTrace = events.length > 0 || showRunning;
 

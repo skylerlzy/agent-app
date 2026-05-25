@@ -9,6 +9,7 @@ import {
 } from "../contracts";
 import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
 import { appendSkillSection } from "../skills/appendSkillSection";
+import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 
 const ALLOWED_TOOLS = new Set<string>(TOOL_NAMES);
 
@@ -28,11 +29,13 @@ function sanitizePlanPhases(phases: PlanPhase[]): PlanPhase[] {
  */
 export class LLMPlanGenerator implements IPlanGenerator {
   private lastSkillSystemSection?: string;
+  private lastRunInput?: AgentRunInput;
 
   constructor(private llmClient: ILLMClient) {}
 
   async draftPlan(input: AgentRunInput): Promise<ExecutionPlan> {
     this.lastSkillSystemSection = input.skillSystemSection;
+    this.lastRunInput = input;
     const { goal, context } = input;
 
     const systemPrompt = appendSkillSection(
@@ -71,12 +74,18 @@ export class LLMPlanGenerator implements IPlanGenerator {
       input.skillSystemSection
     );
 
+    const historyBlock = formatHistoryForPrompt(
+      input.history,
+      input.contextBundle?.conversationSummary
+    );
+
     const userPrompt = `
 ${buildAgentTimeContextLines().join("\n")}
 
-用户目标: ${goal.rawText}
+${historyBlock}用户目标: ${goal.rawText}
 已提取信息: ${JSON.stringify(goal.slots || {})}
 用户偏好: ${JSON.stringify(context.preferences)}
+${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预算、节奏或某一天行程，请在 plannerRationale 中说明如何承接前文约束，并在 phases/steps 中体现修订（勿当作全新首次规划）。" : ""}
 
 请生成一个**可执行且工具利用合理**的出行规划（仅使用已列出的两种工具）：步骤应细化到「查哪几天的天气」「哪几段**同城**路线」；**必须**结合用户给出的 **tripStartDateIso / tripEndDateIso**（或 goal.slots 中的 startDateIso/endDateIso）安排逐日天气查询与日程跨度，并与 travelThemes、pace、budgetCny、transportPreferences、accommodationType、dietaryPreset、travelParty、additionalNotes 相呼应（在 plannerRationale 中要点名如何服务这些偏好）。每个 (city, dateIso) 或 (origin, destination, mode) 组合在计划中**最多出现一次**。
 **步骤 description 中凡出现公历日期、周几，必须与上文【未来14日】及「下周三」等权威对照行完全一致，禁止自行推算或写错星期。**
@@ -120,12 +129,17 @@ ${buildAgentTimeContextLines().join("\n")}
 【严格】每个 step 的 suggestedTools 只能包含：weather_forecast、maps_route_estimate；禁止编造其他工具名。`,
       this.lastSkillSystemSection
     );
+    const historyBlock = formatHistoryForPrompt(
+      this.lastRunInput?.history,
+      this.lastRunInput?.contextBundle?.conversationSummary
+    );
     const userPrompt = `
 ${buildAgentTimeContextLines().join("\n")}
 
-当前计划: ${JSON.stringify(plan)}
+${historyBlock}当前计划: ${JSON.stringify(plan)}
 反馈信息: ${feedback}
 请输出修订后的完整 JSON 计划（含 plannerRationale）。步骤中的日期、周几必须与上文【未来14日】及「下周三」等对照一致。
+${historyBlock ? "若反馈来自多轮对话中的追问，保留未提及天数/约束的既有安排，仅修订相关部分。" : ""}
     `;
 
     const response = await this.llmClient.complete(

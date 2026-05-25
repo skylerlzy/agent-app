@@ -10,7 +10,10 @@ import { LLMPlanGenerator } from "../plan/LLMPlanGenerator";
 import { LLMReflexionPolicy } from "../reflexion/LLMReflexionPolicy";
 import { ReflexionPolicy } from "../reflexion/ReflexionPolicy";
 import { createStubToolRegistry } from "../tools/factory";
+import { IncrementalReviseWorkflow } from "./IncrementalReviseWorkflow";
+import { LightweightWorkflow } from "./LightweightWorkflow";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
+import { RunModeRoutingAgent } from "./RunModeRoutingAgent";
 
 export interface AutonomousAgentPipelineDeps {
   skillRegistry?: ISkillRegistry;
@@ -24,7 +27,7 @@ export function createReflexionPolicy(): IReflexionPolicy {
   return rules;
 }
 
-/** 组装自治 Agent 流水线（天气和风 QWeather、路程高德为真实 HTTP） */
+/** 组装自治 Agent 流水线（含 runMode 路由：quick / incremental / full） */
 export function createAutonomousAgentPipeline(
   traceSink?: ITraceSink,
   _deps?: AutonomousAgentPipelineDeps
@@ -35,5 +38,8 @@ export function createAutonomousAgentPipeline(
   const planGenerator = new LLMPlanGenerator(llmClient);
   const reflexion = createReflexionPolicy();
   const react = new ReactExecutor(llmClient, registry, reflexion, 5);
-  return new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient);
+  const full = new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient);
+  const quick = new LightweightWorkflow(llmClient, traceSink);
+  const incremental = new IncrementalReviseWorkflow(llmClient, traceSink);
+  return new RunModeRoutingAgent(full, quick, incremental);
 }

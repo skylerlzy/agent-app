@@ -7,6 +7,14 @@ export default defineSchema({
     title: v.string(),
     summary: v.optional(v.string()),
     sharedKnowledgeEnabled: v.optional(v.boolean()),
+    /** JSON：对话级出行偏好（成员3 UI 维护） */
+    preferencesJson: v.optional(v.string()),
+    /** 本轮对话附加的 Skill id */
+    activeSkillIds: v.optional(v.array(v.string())),
+    /** 本轮对话启用的工具名（成员6 联调；空表示默认全开） */
+    enabledToolNames: v.optional(v.array(v.string())),
+    /** 全程 Markdown 行程（右侧固定展示；规划/修订时更新） */
+    tripPlanMarkdown: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

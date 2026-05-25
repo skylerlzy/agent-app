@@ -74,6 +74,13 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     yield startEvent;
     await push(startEvent);
 
+    const modeEvent = emitter.emit({
+      type: "run_mode",
+      payload: { mode: input.runMode ?? "full_plan_execute" },
+    });
+    yield modeEvent;
+    await push(modeEvent);
+
     let plan: ExecutionPlan;
     try {
       plan = canonicalizePlanStepIds(await this.planGenerator.draftPlan(input));
