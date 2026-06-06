@@ -153,6 +153,7 @@ export interface ReactTurn {
 export type ReasoningEventType =
   | "session_start"
   | "run_mode"
+  | "agent_handoff"
   | "plan_draft"
   | "plan_final"
   | "react_thought"
@@ -174,6 +175,10 @@ export interface ReasoningEventBase {
 export type ReasoningEvent =
   | (ReasoningEventBase & { type: "session_start"; payload: { goal: string } })
   | (ReasoningEventBase & { type: "run_mode"; payload: { mode: AgentRunMode } })
+  | (ReasoningEventBase & {
+      type: "agent_handoff";
+      payload: { from: AgentRole; to: AgentRole };
+    })
   | (ReasoningEventBase & { type: "plan_draft"; payload: { plan: ExecutionPlan } })
   | (ReasoningEventBase & { type: "plan_final"; payload: { plan: ExecutionPlan } })
   | (ReasoningEventBase & { type: "react_thought"; payload: ReactTurn })
@@ -294,6 +299,49 @@ export interface IConversationContextBuilder {
     activeSkillIds?: string[];
     enabledToolNames?: ToolName[];
   }): Promise<AgentRunInput>;
+}
+
+export interface IKnowledgeService {
+  listLongTermMemories(
+    userId: string,
+    opts?: { conversationId?: string; sharedKnowledgeEnabled?: boolean }
+  ): Promise<UserMemory[]>;
+  extractMemoriesFromTurn(input: {
+    userId: string;
+    conversationId: string;
+    userMessage: string;
+    assistantReply: string;
+  }): Promise<UserMemory[]>;
+  retrieve(input: {
+    userId: string;
+    query: string;
+    topK?: number;
+    filters?: { city?: string; tags?: string[] };
+  }): Promise<KnowledgeChunk[]>;
+}
+
+export interface IContextEngine {
+  compose(input: {
+    systemBase: string;
+    history: ChatMessage[];
+    currentUserText: string;
+    contextBundle: AgentContextBundle;
+    tokenBudget?: number;
+  }): Promise<{ messages: ChatMessage[]; updatedSummary?: string }>;
+}
+
+export interface IRunModeRouter {
+  decide(input: {
+    goalText: string;
+    history: ChatMessage[];
+    hasExistingPlan: boolean;
+  }): AgentRunMode;
+}
+
+export type AgentRole = "planner" | "tool_runner" | "summarizer";
+
+export interface IMultiAgentCoordinator {
+  run(input: AgentRunInput): AsyncIterable<ReasoningEvent>;
 }
 
 // ---------------------------------------------------------------------------

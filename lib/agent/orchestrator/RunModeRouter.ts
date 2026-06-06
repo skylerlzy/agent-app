@@ -1,4 +1,4 @@
-import type { AgentRunMode, ChatMessage } from "../contracts";
+import type { AgentRunMode, ChatMessage, IRunModeRouter } from "../contracts";
 
 const RECAP_PATTERNS: RegExp[] = [
   /复述/,
@@ -53,9 +53,24 @@ const FULL_PLAN_PATTERNS: RegExp[] = [
 
 const FORCE_FULL_PATTERNS: RegExp[] = [/重新规划/, /全新/, /另起/, /从头/, /重做/];
 
-const TOOL_NEEDED_PATTERNS: RegExp[] = [
+/** 简单问答（含天气）：走 quick_reply，允许 0～1 次工具 */
+const SIMPLE_QA_PATTERNS: RegExp[] = [
   /天气怎么样/,
+  /天气如何/,
   /查(?:一下|查)?.*天气/,
+  /会下雨/,
+  /气温/,
+  /多少度/,
+  /冷不冷/,
+  /热不热/,
+  /适合出行吗/,
+  /你好/,
+  /谢谢/,
+  /什么是/,
+  /介绍一下/,
+];
+
+const TOOL_NEEDED_IN_PLAN_PATTERNS: RegExp[] = [
   /路线/,
   /多久/,
   /多远/,
@@ -70,15 +85,14 @@ export interface RunModeRouterInput {
 }
 
 /**
- * 启发式 runMode 路由：复述/问答走 quick_reply；局部修订走 incremental_revise；新规划走 full。
+ * 启发式 runMode 路由：
+ * - 简单问答 / 复述 → quick_reply
+ * - 局部修订（已有方案）→ incremental_revise
+ * - 新规划 / 强制重规划 → full_plan_execute
  */
 export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
   const text = input.goalText.trim();
   if (!text) return "full_plan_execute";
-
-  if (!input.hasExistingPlan) {
-    return "full_plan_execute";
-  }
 
   if (FORCE_FULL_PATTERNS.some((p) => p.test(text))) {
     return "full_plan_execute";
@@ -87,21 +101,30 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
   const isRecap = RECAP_PATTERNS.some((p) => p.test(text));
   const isRevise = REVISE_PATTERNS.some((p) => p.test(text));
   const wantsNewPlan = FULL_PLAN_PATTERNS.some((p) => p.test(text));
-  const needsLiveTool = TOOL_NEEDED_PATTERNS.some((p) => p.test(text));
+  const isSimpleQa = SIMPLE_QA_PATTERNS.some((p) => p.test(text));
+  const needsPlanLevelTool =
+    TOOL_NEEDED_IN_PLAN_PATTERNS.some((p) => p.test(text)) && wantsNewPlan;
+
+  if (isSimpleQa && !wantsNewPlan && !isRevise) {
+    return "quick_reply";
+  }
+
+  if (!input.hasExistingPlan) {
+    if (wantsNewPlan || needsPlanLevelTool) return "full_plan_execute";
+    if (isRevise) return "full_plan_execute";
+    if (text.length <= 80) return "quick_reply";
+    return "full_plan_execute";
+  }
 
   if (isRecap && !isRevise) {
     return "quick_reply";
   }
 
-  if (isRevise && !needsLiveTool) {
+  if (isRevise && !needsPlanLevelTool) {
     return "incremental_revise";
   }
 
   if (wantsNewPlan && !isRecap) {
-    return "full_plan_execute";
-  }
-
-  if (needsLiveTool && !isRecap) {
     return "full_plan_execute";
   }
 
@@ -110,4 +133,11 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
   }
 
   return "full_plan_execute";
+}
+
+/** IRunModeRouter 默认实现（启发式，无 LLM 开销） */
+export class RunModeRouter implements IRunModeRouter {
+  decide(input: RunModeRouterInput): AgentRunMode {
+    return decideRunMode(input);
+  }
 }
