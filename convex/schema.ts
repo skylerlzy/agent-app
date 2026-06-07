@@ -64,4 +64,53 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_name", ["userId", "name"]),
+
+  userMemories: defineTable({
+    userId: v.string(),
+    kind: v.union(
+      v.literal("preference"),
+      v.literal("fact"),
+      v.literal("constraint"),
+      v.literal("other")
+    ),
+    content: v.string(),
+    sourceConversationId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    .index("by_user_kind", ["userId", "kind"])
+    .index("by_user_sourceConversation", ["userId", "sourceConversationId"]),
+
+  knowledgeDocuments: defineTable({
+    userId: v.string(),
+    title: v.string(),
+    sourceType: v.union(v.literal("markdown"), v.literal("text"), v.literal("pdf")),
+    originalText: v.string(),
+    tags: v.array(v.string()),
+    city: v.optional(v.string()),
+    chunkCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    .index("by_user_city", ["userId", "city"]),
+
+  knowledgeChunks: defineTable({
+    userId: v.string(),
+    documentId: v.id("knowledgeDocuments"),
+    documentTitle: v.string(),
+    content: v.string(),
+    citation: v.string(),
+    tags: v.array(v.string()),
+    city: v.optional(v.string()),
+    chunkIndex: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_document", ["documentId"])
+    .index("by_user_city", ["userId", "city"]),
 });

@@ -10,6 +10,7 @@ import {
 import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
+import { formatAgentKnowledgeContext } from "../knowledge";
 
 const ALLOWED_TOOLS = new Set<string>(TOOL_NAMES);
 
@@ -78,10 +79,12 @@ export class LLMPlanGenerator implements IPlanGenerator {
       input.history,
       input.contextBundle?.conversationSummary
     );
+    const knowledgeBlock = formatAgentKnowledgeContext(input.contextBundle);
 
     const userPrompt = `
 ${buildAgentTimeContextLines().join("\n")}
 
+${knowledgeBlock ? `${knowledgeBlock}\n\n` : ""}${knowledgeBlock ? "【知识约束】必须优先遵守长期记忆中的用户偏好/约束；若使用 RAG 片段中的事实，后续总结须保留对应 [来源: …] 标记。\n\n" : ""}
 ${historyBlock}用户目标: ${goal.rawText}
 已提取信息: ${JSON.stringify(goal.slots || {})}
 用户偏好: ${JSON.stringify(context.preferences)}
@@ -133,9 +136,11 @@ ${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预
       this.lastRunInput?.history,
       this.lastRunInput?.contextBundle?.conversationSummary
     );
+    const knowledgeBlock = formatAgentKnowledgeContext(this.lastRunInput?.contextBundle);
     const userPrompt = `
 ${buildAgentTimeContextLines().join("\n")}
 
+${knowledgeBlock ? `${knowledgeBlock}\n\n` : ""}
 ${historyBlock}当前计划: ${JSON.stringify(plan)}
 反馈信息: ${feedback}
 请输出修订后的完整 JSON 计划（含 plannerRationale）。步骤中的日期、周几必须与上文【未来14日】及「下周三」等对照一致。

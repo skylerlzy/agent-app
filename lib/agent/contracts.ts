@@ -457,3 +457,4 @@ export interface ILLMClient {
 }
 
 export { buildSkillSystemSection } from "./skills/buildSkillSystemSection";
+export { formatCitations } from "./knowledge/formatCitations";

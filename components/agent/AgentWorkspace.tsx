@@ -24,9 +24,11 @@ import {
   type StoredChatMessage,
 } from "@/lib/conversationStorage";
 import { extractTripPlanFromHistory } from "@/lib/agent/context/tripPlanMemory";
-import { Send, Rocket } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Brain, Send, Rocket } from "lucide-react";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const EMPTY_SKILL_IDS: string[] = [];
 
 function parseLocalNoon(iso: string): number {
   return Date.parse(`${iso}T12:00:00`);
@@ -76,6 +78,49 @@ function mapToStoredMessage(row: MessageRow, activeSessionId: string | null): St
   };
 }
 
+function SharedKnowledgeToggle({
+  enabled,
+  disabled,
+  onChange,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Brain className="h-4 w-4 text-primary" strokeWidth={1.75} />
+          共享长期记忆
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {enabled ? "本对话会读取其他对话沉淀的偏好与约束" : "仅使用本对话抽取的记忆"}
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-pressed={enabled}
+        aria-label={enabled ? "关闭共享长期记忆" : "开启共享长期记忆"}
+        onClick={() => onChange(!enabled)}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
+          enabled ? "border-primary/50 bg-primary/80" : "border-border bg-muted/60",
+          disabled && "pointer-events-none opacity-50"
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
+            enabled ? "left-[1.35rem]" : "left-0.5"
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 export function AgentWorkspace() {
   const [activeId, setActiveId] = useState<Id<"conversations"> | null>(null);
   const [draft, setDraft] = useState("");
@@ -108,7 +153,11 @@ export function AgentWorkspace() {
     [activeConversation?.preferencesJson]
   );
 
-  const activeSkillIds = activeConversation?.activeSkillIds ?? [];
+  const activeSkillIds = useMemo(
+    () => activeConversation?.activeSkillIds ?? EMPTY_SKILL_IDS,
+    [activeConversation?.activeSkillIds]
+  );
+  const sharedKnowledgeEnabled = activeConversation?.sharedKnowledgeEnabled ?? true;
 
   const uiMessages = useMemo(() => {
     if (!messageRows) return [];
@@ -213,15 +262,16 @@ export function AgentWorkspace() {
   );
 
   const persistConversationMeta = useCallback(
-    async (prefs: ConversationPreferences, skillIds: string[]) => {
+    async (prefs: ConversationPreferences, skillIds: string[], sharedEnabled = sharedKnowledgeEnabled) => {
       if (!activeId) return;
       await updatePreferencesMut({
         conversationId: activeId,
         preferencesJson: serializePreferencesJson(prefs),
         activeSkillIds: skillIds,
+        sharedKnowledgeEnabled: sharedEnabled,
       });
     },
-    [activeId, updatePreferencesMut]
+    [activeId, sharedKnowledgeEnabled, updatePreferencesMut]
   );
 
   const handlePreferencesChange = useCallback(
@@ -236,6 +286,13 @@ export function AgentWorkspace() {
       void persistConversationMeta(preferences, skillIds);
     },
     [preferences, persistConversationMeta]
+  );
+
+  const handleSharedKnowledgeChange = useCallback(
+    (enabled: boolean) => {
+      void persistConversationMeta(preferences, activeSkillIds, enabled);
+    },
+    [activeSkillIds, preferences, persistConversationMeta]
   );
 
   const send = useCallback(async () => {
@@ -325,6 +382,11 @@ export function AgentWorkspace() {
           <div className="shrink-0 space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
             {activeConversation ? (
               <>
+                <SharedKnowledgeToggle
+                  enabled={sharedKnowledgeEnabled}
+                  disabled={loading}
+                  onChange={handleSharedKnowledgeChange}
+                />
                 <SkillPicker selectedIds={activeSkillIds} onChange={handleSkillIdsChange} disabled={loading} />
                 <TripPreferencesPanel preferences={preferences} onChange={handlePreferencesChange} disabled={loading} />
               </>

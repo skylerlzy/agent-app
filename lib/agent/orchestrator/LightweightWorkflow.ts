@@ -9,6 +9,7 @@ import type {
 } from "../contracts";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
+import { formatAgentKnowledgeContext } from "../knowledge";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { inferCityFromText } from "../tools/ToolArgumentValidator";
@@ -130,18 +131,20 @@ export class LightweightWorkflow implements IAutonomousAgent {
       input.history,
       input.contextBundle?.conversationSummary
     );
+    const knowledgeBlock = formatAgentKnowledgeContext(input.contextBundle);
 
     const system = appendSkillSection(
       `你是智能出行助手。本轮为「快速回复」模式：
 - **禁止**重新制定完整行程${wantsWeather && toolContextBlock ? "（已提供一次天气查询结果，请据此回答）" : "，**禁止**假装调用了天气/地图等外部 API"}。
 - 优先从【当前完整行程方案】与【近期对话】中提取信息作答。
+- 必须遵守【长期记忆】中的用户偏好和约束；若引用【RAG 知识片段】，句末保留 [来源: …] 标记。
 - 若用户要求复述某一天（如 Day1 / 第一天），只清晰呈现该日内容，不要重复其他天。
 - 若方案中缺少用户问的信息，明确说明「当前方案未包含」，不要编造。
 - 回答使用 Markdown，可分段但不必包含完整七段行程模板。`,
       input.skillSystemSection
     );
 
-    const user = `${historyBlock}${toolContextBlock}【当前完整行程方案】
+    const user = `${historyBlock}${knowledgeBlock ? `${knowledgeBlock}\n\n` : ""}${toolContextBlock}【当前完整行程方案】
 ${tripPlan || "（尚无已保存的完整方案，请根据对话历史尽量回答，并说明信息可能不完整。）"}
 
 【用户偏好】

@@ -1,6 +1,7 @@
 import type { AgentRunInput, IAutonomousAgent, ILLMClient, ITraceSink, ReasoningEvent } from "../contracts";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
+import { formatAgentKnowledgeContext } from "../knowledge";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { appendSkillSection } from "../skills/appendSkillSection";
 
@@ -39,18 +40,20 @@ export class IncrementalReviseWorkflow implements IAutonomousAgent {
       input.history,
       input.contextBundle?.conversationSummary
     );
+    const knowledgeBlock = formatAgentKnowledgeContext(input.contextBundle);
 
     const system = appendSkillSection(
       `你是智能出行顾问。用户要在**已有全程方案**基础上做局部修订（如改某一天节奏、调整预算档次）。
 要求：
 - 输出**更新后的完整 Markdown 行程**（须含 ## 行程总览、## 日程建议（按天） 等二级标题，结构与原文一致）。
 - 仅修改用户提到的部分；未提及的天数/约束须保留。
+- 必须遵守【长期记忆】中的用户偏好和约束；若引用【RAG 知识片段】，句末保留 [来源: …] 标记。
 - **不要**编造新的实时天气/路线 API 数据；可沿用原方案中的工具结论或标注「沿用上一版查询结果」。
 - 在 ## 行程总览 开头用 1～2 句说明本次修订了什么。`,
       input.skillSystemSection
     );
 
-    const user = `${historyBlock}【当前完整行程方案（待修订）】
+    const user = `${historyBlock}${knowledgeBlock ? `${knowledgeBlock}\n\n` : ""}【当前完整行程方案（待修订）】
 ${tripPlan || "（无基线方案，请根据对话历史重建并应用用户修改。）"}
 
 【用户偏好】

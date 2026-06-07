@@ -14,9 +14,11 @@ import type {
   AgentRunInput,
   AgentRunMode,
   ChatMessage,
+  KnowledgeChunk,
   ITraceSink,
   ReasoningEvent,
   TripPreferences,
+  UserMemory,
   UserGoal,
 } from "../lib/agent/contracts";
 import { buildAgentRunInput } from "../lib/agent/conversation/ConversationContextBuilder";
@@ -134,7 +136,21 @@ async function buildAgentInputForConversation(args: {
     }));
 
   const userMessage = allMessages[currentIndex];
-  return buildAgentRunInput({
+  const [longTermMemories, ragChunks]: [UserMemory[], KnowledgeChunk[]] = await Promise.all([
+    args.ctx.runQuery(internal.memories.listLongTermMemoriesInternal, {
+      userId: args.userId,
+      conversationId: args.conversationId,
+      sharedKnowledgeEnabled: conversation?.sharedKnowledgeEnabled ?? true,
+      limit: 12,
+    }),
+    args.ctx.runQuery(internal.knowledge.retrieveInternal, {
+      userId: args.userId,
+      query: userMessage.content,
+      topK: 5,
+    }),
+  ]);
+
+  const input = await buildAgentRunInput({
     sessionId: args.sessionId,
     userId: args.userId,
     conversationId: args.conversationId,
@@ -146,6 +162,12 @@ async function buildAgentInputForConversation(args: {
     activeSkillIds: args.activeSkillIds,
     enabledToolNames: args.enabledToolNames as AgentRunInput["enabledToolNames"],
   });
+  input.contextBundle = {
+    ...input.contextBundle,
+    longTermMemories,
+    ragChunks,
+  };
+  return input;
 }
 
 async function enrichInputWithSkills(
@@ -387,6 +409,13 @@ async function runAgentInConversationHandler(
         summary: summary.slice(0, 2000),
       });
     }
+
+    await ctx.runMutation(internal.memories.extractFromTurnInternal, {
+      userId,
+      conversationId: args.conversationId,
+      userMessage: userMessageRow.content,
+      assistantReply: summary,
+    });
   }
 
   return { sessionId: args.sessionId };
