@@ -22,6 +22,7 @@ import type {
   UserGoal,
 } from "../lib/agent/contracts";
 import { buildAgentRunInput } from "../lib/agent/conversation/ConversationContextBuilder";
+import { ContextEngine } from "../lib/agent/context/ContextEngine";
 import {
   buildWorkingMemoryWithTripPlan,
   extractTripPlanFromHistory,
@@ -243,6 +244,27 @@ async function executeAgentPipeline(
   return events;
 }
 
+async function optimizeInputContext(args: {
+  ctx: GenericActionCtx<DataModel>;
+  input: AgentRunInput;
+  conversationId?: Id<"conversations">;
+}): Promise<AgentRunInput> {
+  const engine = new ContextEngine();
+  const result = await engine.optimizeAgentInput(args.input, {
+    systemBase:
+      "你是智能出行自治助手。以下上下文已按成员4上下文工程策略裁剪：摘要保留长期约束，近期对话由远及近，工作记忆保存当前行程。",
+  });
+
+  if (args.conversationId && result.updatedSummary?.trim()) {
+    await args.ctx.runMutation(internal.conversations.patchSummaryInternal, {
+      conversationId: args.conversationId,
+      summary: result.updatedSummary.slice(0, 2000),
+    });
+  }
+
+  return result.input;
+}
+
 function summarizeFromEvents(events: ReasoningEvent[]): string {
   const err = [...events].reverse().find((e) => e.type === "run_error");
   if (err && err.type === "run_error") {
@@ -318,7 +340,7 @@ async function runAgentInConversationHandler(
     throw new Error("无法找到用于回应的助手消息。");
   }
 
-  const input = await buildAgentInputForConversation({
+  let input = await buildAgentInputForConversation({
     ctx,
     sessionId: args.sessionId,
     conversationId: args.conversationId,
@@ -358,6 +380,11 @@ async function runAgentInConversationHandler(
       hasExistingPlan: Boolean(tripPlan),
     });
   input.runMode = resolvedMode;
+  input = await optimizeInputContext({
+    ctx,
+    input,
+    conversationId: args.conversationId,
+  });
 
   const traceSink: ITraceSink = {
     emit: async (event: ReasoningEvent) => {
@@ -571,7 +598,10 @@ export const runAgent = action({
       },
     };
 
-    const input = buildAgentInput(args, identity.subject);
+    const input = await optimizeInputContext({
+      ctx,
+      input: buildAgentInput(args, identity.subject),
+    });
     await executeAgentPipeline(ctx, input, args.goalRaw, identity.subject, traceSink);
 
     return { sessionId: args.sessionId };
@@ -652,7 +682,10 @@ export const runAgentEval = action({
     };
 
     const evalUserId = "eval-platform";
-    const input = buildAgentInput(args, evalUserId);
+    const input = await optimizeInputContext({
+      ctx,
+      input: buildAgentInput(args, evalUserId),
+    });
     const t0 = Date.now();
     await executeAgentPipeline(ctx, input, args.goalRaw, evalUserId, traceSink);
     const latencyMs = Date.now() - t0;
