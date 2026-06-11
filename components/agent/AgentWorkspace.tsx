@@ -10,6 +10,8 @@ import { ChatMessageList } from "@/components/agent/ChatMessageList";
 import { ConversationList } from "@/components/agent/ConversationList";
 import { TripPreferencesPanel } from "@/components/agent/TripPreferencesPanel";
 import { SkillPicker } from "@/components/agent/SkillPicker";
+import { ToolPicker } from "@/components/agent/ToolPicker";
+import type { ToolName } from "@/lib/agent/contracts";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -29,6 +31,7 @@ import { Brain, Send, Rocket } from "lucide-react";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const EMPTY_SKILL_IDS: string[] = [];
+const EMPTY_TOOL_NAMES: ToolName[] = [];
 
 function parseLocalNoon(iso: string): number {
   return Date.parse(`${iso}T12:00:00`);
@@ -157,6 +160,10 @@ export function AgentWorkspace() {
     () => activeConversation?.activeSkillIds ?? EMPTY_SKILL_IDS,
     [activeConversation?.activeSkillIds]
   );
+  const enabledToolNames = useMemo(
+    () => (activeConversation?.enabledToolNames ?? EMPTY_TOOL_NAMES) as ToolName[],
+    [activeConversation?.enabledToolNames]
+  );
   const sharedKnowledgeEnabled = activeConversation?.sharedKnowledgeEnabled ?? true;
 
   const uiMessages = useMemo(() => {
@@ -262,12 +269,18 @@ export function AgentWorkspace() {
   );
 
   const persistConversationMeta = useCallback(
-    async (prefs: ConversationPreferences, skillIds: string[], sharedEnabled = sharedKnowledgeEnabled) => {
+    async (
+      prefs: ConversationPreferences,
+      skillIds: string[],
+      toolNames: ToolName[],
+      sharedEnabled = sharedKnowledgeEnabled
+    ) => {
       if (!activeId) return;
       await updatePreferencesMut({
         conversationId: activeId,
         preferencesJson: serializePreferencesJson(prefs),
         activeSkillIds: skillIds,
+        enabledToolNames: toolNames,
         sharedKnowledgeEnabled: sharedEnabled,
       });
     },
@@ -276,23 +289,30 @@ export function AgentWorkspace() {
 
   const handlePreferencesChange = useCallback(
     (prefs: ConversationPreferences) => {
-      void persistConversationMeta(prefs, activeSkillIds);
+      void persistConversationMeta(prefs, activeSkillIds, enabledToolNames);
     },
-    [activeSkillIds, persistConversationMeta]
+    [activeSkillIds, enabledToolNames, persistConversationMeta]
   );
 
   const handleSkillIdsChange = useCallback(
     (skillIds: string[]) => {
-      void persistConversationMeta(preferences, skillIds);
+      void persistConversationMeta(preferences, skillIds, enabledToolNames);
     },
-    [preferences, persistConversationMeta]
+    [enabledToolNames, preferences, persistConversationMeta]
+  );
+
+  const handleToolNamesChange = useCallback(
+    (toolNames: ToolName[]) => {
+      void persistConversationMeta(preferences, activeSkillIds, toolNames);
+    },
+    [activeSkillIds, preferences, persistConversationMeta]
   );
 
   const handleSharedKnowledgeChange = useCallback(
     (enabled: boolean) => {
-      void persistConversationMeta(preferences, activeSkillIds, enabled);
+      void persistConversationMeta(preferences, activeSkillIds, enabledToolNames, enabled);
     },
-    [activeSkillIds, preferences, persistConversationMeta]
+    [activeSkillIds, enabledToolNames, preferences, persistConversationMeta]
   );
 
   const send = useCallback(async () => {
@@ -318,6 +338,7 @@ export function AgentWorkspace() {
         content: text,
         preferences: toTripPreferences(preferences),
         activeSkillIds,
+        enabledToolNames: enabledToolNames.length > 0 ? enabledToolNames : undefined,
       });
       finishedSessionsRef.current.delete(sessionId);
       setActiveSessionId(sessionId);
@@ -326,7 +347,7 @@ export function AgentWorkspace() {
       setRunError(msg);
       setLoading(false);
     }
-  }, [draft, activeId, preferences, activeSkillIds, sendUserMessage]);
+  }, [draft, activeId, preferences, activeSkillIds, enabledToolNames, sendUserMessage]);
 
   if (conversations === undefined) {
     return (
@@ -388,6 +409,11 @@ export function AgentWorkspace() {
                   onChange={handleSharedKnowledgeChange}
                 />
                 <SkillPicker selectedIds={activeSkillIds} onChange={handleSkillIdsChange} disabled={loading} />
+                <ToolPicker
+                  selectedNames={enabledToolNames}
+                  onChange={handleToolNamesChange}
+                  disabled={loading}
+                />
                 <TripPreferencesPanel preferences={preferences} onChange={handlePreferencesChange} disabled={loading} />
               </>
             ) : null}

@@ -1,0 +1,49 @@
+{
+  "version": "iter3-tools-v1",
+  "description": "成员6 工具链优化前后对比用例（tool_correctness / 非法参数拦截 / 工具开关）",
+  "cases": [
+    {
+      "id": "T-01",
+      "goal": "规划南京到上海的跨城行程，估算南京南站到上海虹桥高铁枢纽间的公交耗时",
+      "expectTools": ["rail_schedule_hint"],
+      "forbidTools": ["maps_route_estimate"],
+      "note": "跨城枢纽 transit 应由 validator 拒绝 maps"
+    },
+    {
+      "id": "T-02",
+      "goal": "查一下  的天气",
+      "expectValidatorCodes": ["WEATHER_CITY_REQUIRED"],
+      "note": "空 city 前置拦截，避免和风 GeoAPI 无效请求"
+    },
+    {
+      "id": "T-03",
+      "goal": "规划南京 2 日游，第二天上午想去中山陵附近",
+      "expectTools": ["poi_search", "weather_forecast"],
+      "note": "POI 检索应返回可引用列表"
+    },
+    {
+      "id": "T-04",
+      "goal": "规划深圳 3 日游，每天天气如何",
+      "enabledToolNames": ["maps_route_estimate", "poi_search", "rail_schedule_hint"],
+      "forbidTools": ["weather_forecast"],
+      "note": "MT-6：关闭天气工具后 trace 无 weather tool_call"
+    },
+    {
+      "id": "T-05",
+      "goal": "从杭州东站到西湖步行路线",
+      "expectTools": ["maps_route_estimate"],
+      "argsHint": {
+        "origin": "杭州市杭州东站",
+        "destination": "杭州市西湖风景区"
+      },
+      "note": "同城具体 POI，maps 合法"
+    },
+    {
+      "id": "T-06",
+      "goal": "北京到上海 2026-07-01 出行，高铁有什么注意事项",
+      "expectTools": ["rail_schedule_hint"],
+      "expectDisclaimer": true,
+      "note": "须含 12306 免责声明，非实时时刻"
+    }
+  ]
+}

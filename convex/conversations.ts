@@ -83,6 +83,7 @@ export const updatePreferences = mutation({
     conversationId: v.id("conversations"),
     preferencesJson: v.optional(v.string()),
     activeSkillIds: v.optional(v.array(v.string())),
+    enabledToolNames: v.optional(v.array(v.string())),
     sharedKnowledgeEnabled: v.optional(v.boolean()),
   },
   async handler(ctx, args) {
@@ -94,6 +95,7 @@ export const updatePreferences = mutation({
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.preferencesJson !== undefined) patch.preferencesJson = args.preferencesJson;
     if (args.activeSkillIds !== undefined) patch.activeSkillIds = args.activeSkillIds;
+    if (args.enabledToolNames !== undefined) patch.enabledToolNames = args.enabledToolNames;
     if (args.sharedKnowledgeEnabled !== undefined) {
       patch.sharedKnowledgeEnabled = args.sharedKnowledgeEnabled;
     }

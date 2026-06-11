@@ -98,6 +98,16 @@ export default defineSchema({
     .index("by_user_updatedAt", ["userId", "updatedAt"])
     .index("by_user_city", ["userId", "city"]),
 
+  userToolSettings: defineTable({
+    userId: v.string(),
+    toolName: v.string(),
+    enabled: v.boolean(),
+    configJson: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_tool", ["userId", "toolName"]),
+
   knowledgeChunks: defineTable({
     userId: v.string(),
     documentId: v.id("knowledgeDocuments"),

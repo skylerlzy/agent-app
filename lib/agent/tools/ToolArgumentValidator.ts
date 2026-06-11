@@ -1,9 +1,16 @@
-import type { ToolArguments, ToolError, ToolName } from "../contracts";
+import type {
+  IToolArgumentValidator,
+  ToolArguments,
+  ToolError,
+  ToolName,
+} from "../contracts";
 
 const VAGUE_POI =
   /(?:^|[\s，,])(?:[\u4e00-\u9fff]{1,6}区域|[\u4e00-\u9fff]{0,4}青旅|[\u4e00-\u9fff]{0,4}旅舍)(?:$|[\s，,])/;
 
 const HSR_OR_HUB = /(?:高铁)?(?:南|北|东|西)?站|虹桥|南站|北站|东站|西站/;
+
+const DATE_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 /** 从地址串推断城市（供静态校验） */
 export function inferCityFromText(text: string): string | undefined {
@@ -21,7 +28,6 @@ function isLikelyCrossCityHubTransit(origin: string, dest: string): boolean {
   const oc = inferCityFromText(origin);
   const dc = inferCityFromText(dest);
   if (oc && dc && oc !== dc) return true;
-  // 无城市前缀但明显不同枢纽对（南京南 / 上海虹桥）
   const oHead = origin.replace(/站.*$/u, "").slice(0, 2);
   const dHead = dest.replace(/站.*$/u, "").slice(0, 2);
   return oHead.length >= 2 && dHead.length >= 2 && oHead !== dHead;
@@ -34,6 +40,37 @@ function isVaguePoi(text: string): boolean {
   if (/^[\u4e00-\u9fff]{2,4}青旅$/u.test(t)) return true;
   if (/^海上世界站$/u.test(t) && !t.includes("深圳")) return true;
   return false;
+}
+
+function validateDateIsoOptional(
+  raw: unknown,
+  fieldLabel: string
+): { ok: true; value?: string } | { ok: false; error: ToolError } {
+  if (raw === undefined || raw === null || raw === "") {
+    return { ok: true, value: undefined };
+  }
+  if (typeof raw !== "string") {
+    return {
+      ok: false,
+      error: {
+        code: "DATE_ISO_INVALID",
+        message: `${fieldLabel} 须为 YYYY-MM-DD 字符串。`,
+        retryable: true,
+      },
+    };
+  }
+  const trimmed = raw.trim();
+  if (!DATE_ISO.test(trimmed)) {
+    return {
+      ok: false,
+      error: {
+        code: "DATE_ISO_INVALID",
+        message: `${fieldLabel} 格式须为 YYYY-MM-DD，当前为「${trimmed}」。`,
+        retryable: true,
+      },
+    };
+  }
+  return { ok: true, value: trimmed };
 }
 
 export function validateToolArguments(
@@ -52,7 +89,12 @@ export function validateToolArguments(
         },
       };
     }
-    return { ok: true, normalized: { ...args, city } };
+    const dateCheck = validateDateIsoOptional(args.dateIso, "dateIso");
+    if (!dateCheck.ok) return dateCheck;
+    return {
+      ok: true,
+      normalized: { ...args, city, ...(dateCheck.value ? { dateIso: dateCheck.value } : {}) },
+    };
   }
 
   if (name === "maps_route_estimate") {
@@ -112,5 +154,67 @@ export function validateToolArguments(
     return { ok: true, normalized: { ...args, origin, destination } };
   }
 
+  if (name === "poi_search") {
+    const keywords = typeof args.keywords === "string" ? args.keywords.trim() : "";
+    const city = typeof args.city === "string" ? args.city.trim() : "";
+    if (!keywords) {
+      return {
+        ok: false,
+        error: {
+          code: "POI_KEYWORDS_REQUIRED",
+          message: "poi_search 需要非空 keywords（如「中山陵」「亲子餐厅」）。",
+          retryable: true,
+        },
+      };
+    }
+    if (!city) {
+      return {
+        ok: false,
+        error: {
+          code: "POI_CITY_REQUIRED",
+          message: "poi_search 需要非空 city（如「南京」「杭州」）。",
+          retryable: true,
+        },
+      };
+    }
+    return { ok: true, normalized: { ...args, keywords, city } };
+  }
+
+  if (name === "rail_schedule_hint") {
+    const originCity = typeof args.originCity === "string" ? args.originCity.trim() : "";
+    const destinationCity =
+      typeof args.destinationCity === "string" ? args.destinationCity.trim() : "";
+    if (!originCity || !destinationCity) {
+      return {
+        ok: false,
+        error: {
+          code: "RAIL_CITIES_REQUIRED",
+          message: "rail_schedule_hint 需要非空 originCity 与 destinationCity。",
+          retryable: true,
+        },
+      };
+    }
+    const dateCheck = validateDateIsoOptional(args.dateIso, "dateIso");
+    if (!dateCheck.ok) return dateCheck;
+    return {
+      ok: true,
+      normalized: {
+        ...args,
+        originCity,
+        destinationCity,
+        ...(dateCheck.value ? { dateIso: dateCheck.value } : {}),
+      },
+    };
+  }
+
   return { ok: true, normalized: args };
+}
+
+export class ToolArgumentValidator implements IToolArgumentValidator {
+  validate(
+    name: ToolName,
+    args: ToolArguments
+  ): { ok: true; normalized: ToolArguments } | { ok: false; error: ToolError } {
+    return validateToolArguments(name, args);
+  }
 }

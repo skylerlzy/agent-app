@@ -10,6 +10,8 @@ import {
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
+import { createConfigurableToolRegistry } from "../lib/agent/tools/factory";
+import type { ToolName, UserToolSetting } from "../lib/agent/contracts";
 import type {
   AgentRunInput,
   AgentRunMode,
@@ -185,6 +187,25 @@ async function enrichInputWithSkills(
   return { ...input, skillSystemSection };
 }
 
+async function buildToolRegistryForRun(
+  ctx: GenericActionCtx<DataModel>,
+  userId: string,
+  input: AgentRunInput
+) {
+  const userSettings: UserToolSetting[] = await ctx.runQuery(
+    internal.toolSettings.listForUserInternal,
+    { userId }
+  );
+  const conversationOverride =
+    input.enabledToolNames !== undefined
+      ? (input.enabledToolNames as ToolName[])
+      : undefined;
+  return createConfigurableToolRegistry({
+    userSettings,
+    enabledToolNames: conversationOverride,
+  });
+}
+
 async function executeAgentPipeline(
   ctx: GenericActionCtx<DataModel>,
   input: AgentRunInput,
@@ -203,7 +224,8 @@ async function executeAgentPipeline(
 
   let pipeline;
   try {
-    pipeline = createAutonomousAgentPipeline(sink, {});
+    const toolRegistry = await buildToolRegistryForRun(ctx, userId, input);
+    pipeline = createAutonomousAgentPipeline(sink, { toolRegistry });
   } catch (e) {
     if (e instanceof ConvexError) throw e;
     const message = e instanceof Error ? e.message : String(e);
@@ -340,6 +362,10 @@ async function runAgentInConversationHandler(
     throw new Error("无法找到用于回应的助手消息。");
   }
 
+  const conversationEnabled =
+    args.enabledToolNames ??
+    (conversation.enabledToolNames?.length ? conversation.enabledToolNames : undefined);
+
   let input = await buildAgentInputForConversation({
     ctx,
     sessionId: args.sessionId,
@@ -348,7 +374,7 @@ async function runAgentInConversationHandler(
     userMessageId: args.userMessageId,
     preferences: args.preferences ?? {},
     activeSkillIds: args.activeSkillIds,
-    enabledToolNames: args.enabledToolNames,
+    enabledToolNames: conversationEnabled,
     runMode: args.runMode,
   });
 

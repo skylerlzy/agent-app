@@ -89,7 +89,12 @@ export interface PlanPhase {
 // 工具层（至少 2 个主题相关外部工具；此处固定两个接口名）
 // ---------------------------------------------------------------------------
 
-export const TOOL_NAMES = ["weather_forecast", "maps_route_estimate"] as const;
+export const TOOL_NAMES = [
+  "weather_forecast",
+  "maps_route_estimate",
+  "poi_search",
+  "rail_schedule_hint",
+] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -417,9 +422,31 @@ export interface IReflexionPolicy {
   }>;
 }
 
+/** 用户工具开关（产品化基本：管理工具） */
+export interface UserToolSetting {
+  userId: string;
+  toolName: ToolName;
+  enabled: boolean;
+  /** 可选 JSON，如 { defaultMode: "transit" } */
+  configJson?: string;
+  updatedAt: number;
+}
+
 export interface IToolRegistry {
   list(): ToolDefinition[];
   get(name: ToolName): ToolDefinition | undefined;
+  /** 迭代三：按用户设置过滤（settings 为空表示全部启用） */
+  listForUser(userId: string, settings: UserToolSetting[]): ToolDefinition[];
+}
+
+/** 工具调用前校验（成员6） */
+export interface IToolArgumentValidator {
+  validate(
+    name: ToolName,
+    args: ToolArguments
+  ):
+    | { ok: true; normalized: ToolArguments }
+    | { ok: false; error: ToolError };
 }
 
 export interface ITraceSink {

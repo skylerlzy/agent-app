@@ -7,4 +7,9 @@ export { ReactExecutor } from "./loops/ReactExecutor";
 export { ReflexionPolicy } from "./reflexion/ReflexionPolicy";
 export { LLMReflexionPolicy } from "./reflexion/LLMReflexionPolicy";
 export { ToolRegistry } from "./tools/registry";
-export { createStubToolRegistry } from "./tools/factory";
+export {
+  createConfigurableToolRegistry,
+  createFullToolRegistry,
+  createStubToolRegistry,
+} from "./tools/factory";
+export { ToolArgumentValidator, validateToolArguments } from "./tools/ToolArgumentValidator";

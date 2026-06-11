@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { fetchWithTimeout } from "../http/fetchWithTimeout";
 import type { ToolContext, ToolDefinition, ToolResult } from "../contracts";
+import { TOOL_LLM_DESCRIPTIONS } from "./descriptions";
 import { inferCityFromText } from "./ToolArgumentValidator";
 
 function toolHttpTimeoutMs(): number {
@@ -242,8 +243,7 @@ function formatDurationHuman(seconds: number): string {
 
 export const weatherToolStub: ToolDefinition<z.infer<typeof weatherArgs>, { note: string }> = {
   name: "weather_forecast",
-  description:
-    "和风天气：**能返回** 实时天气、7/15/30 日内逐日预报（含 precip 日总量 mm）、weekOutlookText；若 GeoAPI 有坐标则尝试 airquality/v1 空气质量。**不能返回** 超出 30 天的指定日预报、逐小时 14:00–17:00 降水概率（需 hourly API，本工具无）。同参再调不会新增字段；若 note 含「不在 N 日预报内」或 doNotRetrySameArgs=true 须立即收束。dateIso 超出 7 天时会自动尝试 15d/30d。",
+  description: TOOL_LLM_DESCRIPTIONS.weather_forecast,
   argsSchema: weatherArgs,
   async execute(args, _ctx: ToolContext): Promise<ToolResult<any>> {
     const apiKey = process.env.QWEATHER_API_KEY?.trim();
@@ -577,8 +577,7 @@ function buildRangeExceededFallback(
 
 export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note: string }> = {
   name: "maps_route_estimate",
-  description:
-    "高德 Web 地理编码 + 路径规划。**适用**：同城 POI 间 walking/transit/driving 短距离接驳耗时粗估；origin/destination 须「城市+具体 POI」（如「深圳市南山区深圳湾公园南门」）。**不适用**：高铁枢纽间班次/时刻、12306 票价、站内换乘通道细节、步行 <500m 站内动线、跨城公交方案。跨城长距离仅作驾车尺度参考；跨城+transit 会被拒绝。地理编码会带 city 消歧并校验同城 OD 距离。",
+  description: TOOL_LLM_DESCRIPTIONS.maps_route_estimate,
   argsSchema: routeArgs,
   async execute(args, _ctx: ToolContext): Promise<ToolResult<any>> {
     const key = process.env.AMAP_WEBSERVICE_KEY;
@@ -880,6 +879,196 @@ export const mapsRouteToolStub: ToolDefinition<z.infer<typeof routeArgs>, { note
           : undefined,
         note: noteExtra || "OK",
         doNotRetrySameArgs: false,
+      },
+    };
+  },
+};
+
+const poiArgs = z.object({
+  keywords: z.string().min(1),
+  city: z.string().min(1),
+  types: z.string().optional(),
+});
+
+type PoiRow = {
+  id?: string;
+  name?: string;
+  type?: string;
+  typecode?: string;
+  address?: string;
+  location?: string;
+  tel?: string;
+};
+
+export const poiSearchTool: ToolDefinition<
+  z.infer<typeof poiArgs>,
+  { pois: unknown[]; total: number; note: string }
+> = {
+  name: "poi_search",
+  description: TOOL_LLM_DESCRIPTIONS.poi_search,
+  argsSchema: poiArgs,
+  async execute(args, _ctx): Promise<ToolResult<any>> {
+    const key = process.env.AMAP_WEBSERVICE_KEY?.trim();
+    if (!key) {
+      return {
+        ok: false,
+        error: {
+          code: "MISSING_CONFIG",
+          message: "缺少 AMAP_WEBSERVICE_KEY，无法检索 POI。请在 Convex Dashboard 配置高德 Web 服务 Key。",
+          retryable: false,
+        },
+      };
+    }
+
+    const params = new URLSearchParams({
+      keywords: args.keywords.trim(),
+      city: args.city.trim(),
+      offset: "10",
+      page: "1",
+      extensions: "base",
+      key,
+    });
+    if (args.types?.trim()) params.set("types", args.types.trim());
+
+    const url = `https://restapi.amap.com/v3/place/text?${params.toString()}`;
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(
+        url,
+        {},
+        toolHttpTimeoutMs(),
+        "高德 POI 检索请求超时",
+        "amap:poi_search"
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_POI_NETWORK",
+          message: `POI 检索网络异常：${message}。可稍后重试或改用更具体的关键词。`,
+          retryable: true,
+          cause: e,
+        },
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_POI_HTTP",
+          message: `高德 POI 接口 HTTP ${res.status}，请检查 Key 配额或稍后重试。`,
+          retryable: res.status >= 500 || res.status === 429,
+        },
+      };
+    }
+
+    let body: { status?: string | number; info?: string; pois?: PoiRow[]; count?: string };
+    try {
+      body = (await res.json()) as typeof body;
+    } catch (e) {
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_POI_PARSE",
+          message: "POI 响应解析失败，请重试。",
+          retryable: true,
+          cause: e,
+        },
+      };
+    }
+
+    if (String(body.status) !== "1") {
+      const info = String(body.info ?? body.status ?? "未知错误");
+      return {
+        ok: false,
+        error: {
+          code: "AMAP_POI_STATUS",
+          message: `POI 检索失败：${info}。请检查 city/keywords 是否有效，或缩小关键词范围后重试。`,
+          retryable: true,
+        },
+      };
+    }
+
+    const rawPois = Array.isArray(body.pois) ? body.pois : [];
+    const pois = rawPois.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      typecode: p.typecode,
+      address: p.address,
+      location: p.location,
+      tel: p.tel,
+    }));
+
+    return {
+      ok: true,
+      data: {
+        provider: "amap_place_text",
+        city: args.city,
+        keywords: args.keywords,
+        total: Number(body.count ?? pois.length) || pois.length,
+        pois,
+        note:
+          pois.length > 0
+            ? `返回 ${pois.length} 条 POI，供行程规划引用。`
+            : "未命中 POI，可换关键词或补充 types 后重试。",
+        doNotRetrySameArgs: false,
+      },
+    };
+  },
+};
+
+const railArgs = z.object({
+  originCity: z.string().min(1),
+  destinationCity: z.string().min(1),
+  dateIso: z.string().optional(),
+});
+
+const RAIL_DISCLAIMER =
+  "【免责声明】本工具不提供 12306 实时余票、票价或精确时刻表，仅供参考。购票与改签请以中国铁路 12306 官方渠道为准。";
+
+export const railScheduleHintTool: ToolDefinition<
+  z.infer<typeof railArgs>,
+  { hints: string[]; disclaimer: string }
+> = {
+  name: "rail_schedule_hint",
+  description: TOOL_LLM_DESCRIPTIONS.rail_schedule_hint,
+  argsSchema: railArgs,
+  async execute(args): Promise<ToolResult<any>> {
+    const origin = args.originCity.trim();
+    const dest = args.destinationCity.trim();
+    const dateNote = args.dateIso?.trim()
+      ? `计划出行日 ${args.dateIso}（须以 12306 当日开行方案为准）。`
+      : "未指定日期时，请在 12306 选择具体乘车日查询。";
+
+    const sameCity = origin.replace(/市$/u, "") === dest.replace(/市$/u, "");
+    const hints: string[] = [
+      RAIL_DISCLAIMER,
+      `起讫：${origin} → ${dest}。${dateNote}`,
+    ];
+
+    if (sameCity) {
+      hints.push("起讫同城：市内出行优先地铁/公交；若误用于铁路查询请改用 maps_route_estimate。");
+    } else {
+      hints.push(
+        "跨城高铁/动车：建议在 12306 搜索「车站名」而非仅城市名（如「南京南」「上海虹桥」）。",
+        "换乘：关注「同站换乘」与「异站换乘」时间缓冲，大站建议预留 30–45 分钟。",
+        "节假日与周五晚高峰余票紧张，可关注候补购票。"
+      );
+    }
+
+    return {
+      ok: true,
+      data: {
+        originCity: origin,
+        destinationCity: dest,
+        dateIso: args.dateIso,
+        hints,
+        disclaimer: RAIL_DISCLAIMER,
+        note: "提示型结果，非实时班次数据。",
+        doNotRetrySameArgs: true,
       },
     };
   },

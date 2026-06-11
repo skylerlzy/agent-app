@@ -11,15 +11,20 @@ import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { formatAgentKnowledgeContext } from "../knowledge";
+import { buildToolsPromptSection, formatAllowedToolsList } from "../tools/descriptions";
+import { resolveEnabledToolNames } from "../tools/resolveEnabledTools";
 
-const ALLOWED_TOOLS = new Set<string>(TOOL_NAMES);
+function allowedToolsForInput(input: AgentRunInput): ToolName[] {
+  const resolved = resolveEnabledToolNames([], input.enabledToolNames);
+  return resolved?.length ? resolved : [...TOOL_NAMES];
+}
 
-function sanitizePlanPhases(phases: PlanPhase[]): PlanPhase[] {
+function sanitizePlanPhases(phases: PlanPhase[], allowed: Set<string>): PlanPhase[] {
   return phases.map((ph) => ({
     ...ph,
     steps: (ph.steps ?? []).map((st) => {
       const raw = st.suggestedTools ?? [];
-      const suggestedTools = raw.filter((n): n is ToolName => ALLOWED_TOOLS.has(n));
+      const suggestedTools = raw.filter((n): n is ToolName => allowed.has(n));
       return { ...st, suggestedTools: suggestedTools.length ? suggestedTools : undefined };
     }),
   }));
@@ -38,26 +43,29 @@ export class LLMPlanGenerator implements IPlanGenerator {
     this.lastSkillSystemSection = input.skillSystemSection;
     this.lastRunInput = input;
     const { goal, context } = input;
+    const allowedNames = allowedToolsForInput(input);
+    const allowedSet = new Set<string>(allowedNames);
+    const toolsSection = buildToolsPromptSection(allowedNames);
+    const toolsListText = formatAllowedToolsList(allowedNames);
 
     const systemPrompt = appendSkillSection(
       `
 你是一个专业的智能出行助手。你的任务是根据用户的目标和上下文，制定一个多阶段的执行计划。
 
 【可用工具清单】（名称不可改；执行器会按步骤调用，**禁止同参重复**）
-- weather_forecast：**能** 7/15/30 日逐日预报（precip 日总量）、实时、weekOutlook、airQualityAvailable；**不能** 超 30 日指定日、逐小时降水概率。超出范围时工具会 note + doNotRetrySameArgs，步骤应规划「查关键日一次即可」，禁止「查 AQI 直到返回」类循环步骤。
-- maps_route_estimate：**仅** 同城 POI 间 walking/transit/driving 粗估；origin/destination 须「城市+具体 POI」。**禁止** 规划：跨城高铁/枢纽 transit、验证站内换乘 500m、12306 时刻/票价、同站步行 1 分钟类 OD。跨城铁路用文字+12306，不调用 maps。
+${toolsSection}
 
 【规划禁忌】
 - 不要生成「反复调用直到 AQI 出现」「验证站内换乘通道步行距离」等步骤。
-- 跨城段（如南京南→深圳北）勿用 maps；仅同城接驳（如「深圳市深圳北站→深圳市南山区某酒店」）可用 maps。
-- 地名禁止「XX区域」「XX青旅」等模糊表述；示例：「深圳市南山区深圳湾公园南门」。
+- 跨城段优先 rail_schedule_hint + 文字说明；同城接驳用 maps_route_estimate。
+- 景点候选收集优先 poi_search；地名禁止「XX区域」「XX青旅」等模糊表述。
 
 【输出要求】
 1. 必须严格按照 JSON 格式输出，不要包含任何解释性文字或 Markdown 代码围栏。
 2. 根对象必须包含字符串字段 plannerRationale（200–600 字）：说明如何理解用户目标、为何分这些阶段、各工具如何支撑结论（体现规划思考，而非罗列步骤）。**plannerRationale 为必填，不得省略。**
 3. 计划应分为若干个逻辑阶段 (phases)，阶段数量与粒度由你根据目标复杂度决定。
 4. 每个步骤 (step) 必须有清晰的描述，并指明建议调用的工具；步骤 id 须从 s1 起连续编号（s1,s2,s3…），不要使用 s0。
-5. 【严格】每个 step 的 suggestedTools 只能从且仅能使用：weather_forecast、maps_route_estimate。禁止编造任何其它工具名（含 air_forecast、air_quality、flight_api、booking_service 等）；禁止在 JSON 或 plannerRationale 中暗示「再接入」未列出的 API。
+5. 【严格】每个 step 的 suggestedTools 只能从且仅能使用：${toolsListText}。禁止编造任何其它工具名；禁止在 JSON 或 plannerRationale 中暗示「再接入」未列出的 API。
 6. JSON 结构参考：
 {
   "plannerRationale": "……",
@@ -121,15 +129,20 @@ ${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预
     return {
       planId: `plan_${Date.now()}_${input.sessionId}`,
       plannerRationale: plannerRationale || undefined,
-      phases: sanitizePlanPhases(parsedPlan.phases),
+      phases: sanitizePlanPhases(parsedPlan.phases, allowedSet),
     };
   }
 
   async revisePlan(plan: ExecutionPlan, feedback: string): Promise<ExecutionPlan> {
+    const allowedNames = this.lastRunInput
+      ? allowedToolsForInput(this.lastRunInput)
+      : [...TOOL_NAMES];
+    const toolsListText = formatAllowedToolsList(allowedNames);
+    const allowedSet = new Set<string>(allowedNames);
     const systemPrompt = appendSkillSection(
       `你是一个计划修订专家。根据用户或工具反馈的错误信息，对现有的执行计划进行修订。
 输出合法 JSON，根级须含 plannerRationale（简述本次修订动机与结构调整）、phases 数组，不要 Markdown。
-【严格】每个 step 的 suggestedTools 只能包含：weather_forecast、maps_route_estimate；禁止编造其他工具名。`,
+【严格】每个 step 的 suggestedTools 只能包含：${toolsListText}；禁止编造其他工具名。`,
       this.lastSkillSystemSection
     );
     const historyBlock = formatHistoryForPrompt(
@@ -166,7 +179,10 @@ ${historyBlock ? "若反馈来自多轮对话中的追问，保留未提及天�
         ? revised.plannerRationale.trim()
         : plan.plannerRationale;
 
-    const phases = sanitizePlanPhases(Array.isArray(revised.phases) ? revised.phases : plan.phases);
+    const phases = sanitizePlanPhases(
+      Array.isArray(revised.phases) ? revised.phases : plan.phases,
+      allowedSet
+    );
 
     return {
       planId: revised.planId ?? plan.planId,

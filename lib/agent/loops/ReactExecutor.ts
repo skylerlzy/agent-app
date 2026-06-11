@@ -15,17 +15,15 @@ import type {
   UserContext,
   UserGoal,
 } from "../contracts";
-import { TOOL_NAMES } from "../contracts";
 import { FAILED_TURN_PREFIX } from "../reflexion/ReflexionPolicy";
 import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
+import { buildToolsPromptSection, formatAllowedToolsList } from "../tools/descriptions";
 import { validateToolArguments } from "../tools/ToolArgumentValidator";
 import {
   hashToolResultSummary,
   normalizeToolCallKey,
   parseDoNotRetrySameArgs,
 } from "../tools/toolCallGuard";
-
-const REGISTERED_TOOL_NAMES = new Set<string>(TOOL_NAMES);
 
 function zodLikeToJsonSchema(schema: unknown): object {
   const fallback = { type: "object", additionalProperties: true };
@@ -89,6 +87,10 @@ export class ReactExecutor implements IReactExecutor {
     goal: UserGoal;
   }): AsyncIterable<ReasoningEvent> {
     const { emitter, step, context, goal } = input;
+    const registryToolNames = this.registry.list().map((t) => t.name);
+    const allowedToolSet = new Set<string>(registryToolNames);
+    const toolsPrompt = buildToolsPromptSection(registryToolNames);
+    const allowedListText = formatAllowedToolsList(registryToolNames);
 
     // 1. 初始化对话历史，为 LLM 提供当前步骤的上下文
     const messages: ChatMessage[] = [
@@ -96,12 +98,11 @@ export class ReactExecutor implements IReactExecutor {
         role: "system",
         content: `你是一个执行专家。当前任务步骤是: "${step.description}"。
         你的目标是完成本步所需的事实收集，在**必要且参数不同**时调用工具，然后收束为简短结论。
-        【硬性约束】你只能使用本回合 API 传入的 tools 列表中的函数（仅 weather_forecast、maps_route_estimate）。禁止输出任何其它函数名。
+        【硬性约束】你只能使用本回合 API 传入的 tools 列表中的函数（${allowedListText}）。禁止输出任何其它函数名。
         【禁止重复调用】同一 (tool, args) 在本步内已成功调用过则**禁止再调**；工具返回 doNotRetrySameArgs=true 或 note 含「不在 N 日预报内」「已改读实时」时，须**立即**用文字收束，勿同参重试。
         【读 note 即能力上限】工具 note 说明的数据边界即为最终答案，不要试图「再调一次拿更多字段」。
         【工具契约】
-        - weather_forecast：**能** 7/15/30 日逐日 precip、实时、weekOutlook、airQualityAvailable；**不能** 逐小时降水概率、超 30 日指定日。AQI 不可用时不重试。
-        - maps_route_estimate：**仅** 同城 POI 间 walking/transit/driving 粗估；**禁止** 跨城高铁/枢纽 transit、站内换乘 <500m、12306 时刻。origin/destination 须「城市+具体 POI」，禁止「XX区域」「XX青旅」等模糊名。跨城铁路用文字+12306。
+${toolsPrompt}
         当信息已足够完成本步骤时，请给出简短总结并结束；不要捏造工具名。
         工具参数必须符合 JSON Schema。`,
       },
@@ -125,8 +126,11 @@ export class ReactExecutor implements IReactExecutor {
     let done = false;
 
     while (!done && turn < this.maxTurns) {
-      // 2. 获取当前步骤建议的工具定义
-      const availableTools = (step.suggestedTools || [])
+      // 2. 暴露已启用工具：优先步骤建议，否则开放 registry 内全部
+      const suggested = (step.suggestedTools ?? []).filter((n) => allowedToolSet.has(n));
+      const namesToExpose =
+        suggested.length > 0 ? suggested : registryToolNames;
+      const availableTools = namesToExpose
         .map((name) => this.registry.get(name))
         .filter((t): t is NonNullable<typeof t> => !!t)
         .map((t) => ({
@@ -163,7 +167,7 @@ export class ReactExecutor implements IReactExecutor {
         turnIndex: turn,
         thought: thoughtText,
         toolName:
-          toolCall && REGISTERED_TOOL_NAMES.has(toolCall.name) ? (toolCall.name as ToolName) : null,
+          toolCall && allowedToolSet.has(toolCall.name) ? (toolCall.name as ToolName) : null,
         toolArguments: parsedToolArgs,
         toolResultSummary: "",
       };
@@ -178,10 +182,10 @@ export class ReactExecutor implements IReactExecutor {
       }
 
       // 3b. 硬校验：仅允许白名单工具（防止虚构 air_forecast 等；OpenAI 层已过滤一轮，此处再兜底）
-      if (!REGISTERED_TOOL_NAMES.has(toolCall.name)) {
+      if (!allowedToolSet.has(toolCall.name)) {
         const err = {
           code: "TOOL_NOT_ALLOWED",
-          message: `禁止调用未开放工具「${toolCall.name}」。仅允许：${[...REGISTERED_TOOL_NAMES].join("、")}。请勿虚构其它工具名；空气质量请只通过 weather_forecast 获取。`,
+          message: `禁止调用未开放工具「${toolCall.name}」。仅允许：${allowedListText}。请勿虚构其它工具名。`,
           retryable: true,
         };
         yield emitter.emit({
@@ -204,7 +208,7 @@ export class ReactExecutor implements IReactExecutor {
         });
         messages.push({
           role: "user",
-          content: `${err.message} 请只使用已注册的两种工具之一重新选择调用，或在不调用工具的情况下用文字完成本步。`,
+          content: `${err.message} 请只使用已注册工具重新选择调用，或在不调用工具的情况下用文字完成本步。`,
         });
         turn++;
         continue;

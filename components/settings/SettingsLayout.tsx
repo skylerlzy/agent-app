@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BookOpen, Brain, Database, Sparkles } from "lucide-react";
+import { BookOpen, Brain, Database, Sparkles, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 
 const NAV = [
   { href: "/settings/skills", label: "Skill 管理", icon: Sparkles },
+  { href: "/settings/tools", label: "工具管理", icon: Wrench },
   { href: "/settings/memory", label: "长期记忆", icon: Brain },
   { href: "/settings/knowledge", label: "知识库", icon: Database },
 ] as const;
