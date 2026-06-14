@@ -11,11 +11,12 @@ const RECAP_PATTERNS: RegExp[] = [
   /已经生成(?:的)?/,
   /上面(?:的|提到)/,
   /刚才(?:的|说)/,
-  /day\s*\d+/i,
-  /第\s*[一二三四五六七八九十\d]+\s*天/,
   /哪(?:一|1)?天/,
   /行程(?:是|安排)(?:什么|怎样)/,
   /帮我(?:看|列|整理).*(?:day|第.*天)/i,
+  // 须带「复述/查看」语境，避免「第三天节奏改紧凑」被误判为复述
+  /(?:复述|重复|再说|回顾|看看|说一下).*(?:day\s*\d+|第\s*[一二三四五六七八九十\d]+\s*天)/i,
+  /(?:day\s*\d+|第\s*[一二三四五六七八九十\d]+\s*天).*(?:是什么|有哪些|怎么安排|内容|怎样|说了什么)/i,
 ];
 
 const REVISE_PATTERNS: RegExp[] = [
@@ -28,6 +29,10 @@ const REVISE_PATTERNS: RegExp[] = [
   /去掉/,
   /增加/,
   /添加/,
+  /加入/,
+  /嵌入/,
+  /纳入/,
+  /列入/,
   /减少/,
   /降低/,
   /升(?:高|到)/,
@@ -38,6 +43,15 @@ const REVISE_PATTERNS: RegExp[] = [
   /多(?:点|些)?.*景点/,
   /重新规划/,
   /换(?:个|一种)/,
+  /紧凑/,
+  /更(?:紧凑|轻松|慢|快)/,
+  /多安排/,
+  /少安排/,
+  /更多活动/,
+  /写入.*日程/,
+  /更新.*(?:day|第.*天|日程)/i,
+  /(?:第\s*[一二三四五六七八九十\d]+\s*天|day\s*\d+).*(?:节奏|日程|行程|安排|活动|景点)/i,
+  /(?:节奏|日程|行程).*(?:第\s*[一二三四五六七八九十\d]+\s*天|day\s*\d+)/i,
 ];
 
 const FULL_PLAN_PATTERNS: RegExp[] = [
@@ -94,6 +108,7 @@ export interface RunModeRouterInput {
   goalText: string;
   history: ChatMessage[];
   hasExistingPlan: boolean;
+  planSummaryHint?: string;
 }
 
 /**
@@ -131,12 +146,13 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
     return "full_plan_execute";
   }
 
-  if (isRecap && !isRevise) {
-    return "quick_reply";
-  }
-
+  // 修订优先于「含 DayN 字样」的复述，避免局部改日程误走 quick_reply
   if (isRevise && !needsPlanLevelTool) {
     return "incremental_revise";
+  }
+
+  if (isRecap && !isRevise) {
+    return "quick_reply";
   }
 
   if (needsFullPlan && !isRecap) {
@@ -152,7 +168,10 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
 
 /** IRunModeRouter 默认实现（启发式，无 LLM 开销） */
 export class RunModeRouter implements IRunModeRouter {
-  decide(input: RunModeRouterInput): AgentRunMode {
-    return decideRunMode(input);
+  async decide(input: RunModeRouterInput) {
+    return {
+      mode: decideRunMode(input),
+      source: "heuristic" as const,
+    };
   }
 }

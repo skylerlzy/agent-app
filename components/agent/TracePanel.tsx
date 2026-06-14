@@ -25,6 +25,7 @@ function eventAccentClass(type: ReasoningEvent["type"]): string {
   const map: Record<string, string> = {
     session_start: "border-l-sky-500/70 bg-sky-50/90",
     run_mode: "border-l-indigo-500/60 bg-indigo-50/92",
+    knowledge_retrieved: "border-l-violet-500/55 bg-violet-50/92",
     plan_draft: "border-l-amber-500/65 bg-amber-50/95",
     plan_final: "border-l-amber-600/55 bg-amber-50/90",
     react_thought: "border-l-teal-600/55 bg-teal-50/92",
@@ -43,6 +44,7 @@ function typeLabel(type: ReasoningEvent["type"]): string {
   const labels: Record<string, string> = {
     session_start: "会话",
     run_mode: "运行模式",
+    knowledge_retrieved: "知识检索",
     plan_draft: "规划初稿",
     plan_final: "规划定稿",
     react_thought: "ReAct 思考",
@@ -120,12 +122,49 @@ function EventBody({ e }: { e: ReasoningEvent }) {
           </p>
         </div>
       );
-    case "run_mode":
+    case "run_mode": {
+      const labels: Record<string, string> = {
+        full_plan_execute: "完整规划",
+        incremental_revise: "增量修订",
+        quick_reply: "快速回复",
+      };
+      const sourceLabels: Record<string, string> = {
+        llm: "LLM 语义路由",
+        heuristic: "规则路由",
+        override: "手动指定",
+      };
+      const p = e.payload;
       return (
-        <p className="font-mono text-xs text-foreground sm:text-sm">
-          {JSON.stringify(e.payload, null, 2)}
-        </p>
+        <div className="space-y-1 text-xs sm:text-sm">
+          <p className="font-medium text-foreground">{labels[p.mode] ?? p.mode}</p>
+          {p.source ? (
+            <p className="text-muted-foreground">{sourceLabels[p.source] ?? p.source}</p>
+          ) : null}
+          {p.reason ? <p className="leading-relaxed text-foreground/90">{p.reason}</p> : null}
+          {p.confidence !== undefined ? (
+            <p className="font-mono text-[11px] text-muted-foreground">
+              confidence {p.confidence.toFixed(2)}
+            </p>
+          ) : null}
+        </div>
       );
+    }
+    case "knowledge_retrieved": {
+      const p = e.payload;
+      return (
+        <div className="space-y-1 text-xs sm:text-sm">
+          {p.skipped ? (
+            <p className="text-muted-foreground">已跳过检索：{p.reason ?? "无需外部知识库"}</p>
+          ) : (
+            <p className="text-foreground">
+              召回 <span className="font-medium">{p.chunkCount}</span> 条知识块
+              {p.documentTitles.length ? `（${p.documentTitles.join("、")}）` : ""}
+            </p>
+          )}
+          <p className="font-mono text-[11px] text-muted-foreground">query: {p.query}</p>
+        </div>
+      );
+    }
     case "plan_draft":
       return <PlanBody plan={e.payload.plan} variant="draft" />;
     case "plan_final":

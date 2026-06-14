@@ -9,6 +9,7 @@ import type {
   ReasoningEvent,
 } from "../contracts";
 import { buildRunDoneSummary, type ToolLogEntry } from "./finalTravelSummary";
+import { buildRunModeEventPayload } from "./runModeDecision";
 import { agentDebug } from "../debugLog";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 
@@ -76,7 +77,7 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
 
     const modeEvent = emitter.emit({
       type: "run_mode",
-      payload: { mode: input.runMode ?? "full_plan_execute" },
+      payload: buildRunModeEventPayload(input.runMode ?? "full_plan_execute", input.runModeMeta),
     });
     yield modeEvent;
     await push(modeEvent);

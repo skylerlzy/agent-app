@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from "@/component
 import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Database, FileUp, RefreshCcw, Search, Trash2, Upload } from "lucide-react";
+import { Database, FileUp, Pencil, RefreshCcw, Search, Trash2, Upload, X } from "lucide-react";
 
 type SourceType = "markdown" | "text" | "pdf";
 
@@ -31,6 +31,7 @@ function sourceTypeFromName(name: string): SourceType {
 export function KnowledgePanel() {
   const docs = useQuery(api.knowledge.listDocuments, { limit: 100 });
   const uploadDocument = useMutation(api.knowledge.uploadDocument);
+  const updateDocument = useMutation(api.knowledge.updateDocument);
   const rebuildDocument = useMutation(api.knowledge.rebuildDocument);
   const removeDocument = useMutation(api.knowledge.removeDocument);
 
@@ -42,8 +43,14 @@ export function KnowledgePanel() {
   const [text, setText] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const editingDoc = useQuery(
+    api.knowledge.getDocument,
+    editingId ? { documentId: editingId } : "skip"
+  );
 
   const results = useQuery(
     api.knowledge.retrieve,
@@ -112,14 +119,58 @@ export function KnowledgePanel() {
       setError(null);
       try {
         await removeDocument({ documentId: documentId as Id<"knowledgeDocuments"> });
+        if (editingId === documentId) setEditingId(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);
       }
     },
-    [removeDocument]
+    [editingId, removeDocument]
   );
+
+  const handleStartEdit = useCallback((documentId: string) => {
+    setEditingId(documentId);
+    setError(null);
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingId || !editingDoc) return;
+    const body = text.trim();
+    if (body.length < 20) {
+      setError("文档内容至少需要 20 个字符。");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await updateDocument({
+        documentId: editingId as Id<"knowledgeDocuments">,
+        title: title.trim() || editingDoc.title,
+        text: body,
+        tags: parseTags(tagsText),
+        city: city.trim() || undefined,
+      });
+      setEditingId(null);
+      setText("");
+      setTitle("");
+      setCity("");
+      setTagsText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [city, editingDoc, editingId, tagsText, text, title, updateDocument]);
+
+  useEffect(() => {
+    if (!editingDoc || editingId !== editingDoc.id) return;
+    setTitle(editingDoc.title);
+    setCity(editingDoc.city ?? "");
+    setTagsText(editingDoc.tags.join(", "));
+    setText(editingDoc.originalText);
+    setSourceType(editingDoc.sourceType);
+  }, [editingDoc, editingId]);
 
   if (docs === undefined) {
     return (
@@ -138,7 +189,7 @@ export function KnowledgePanel() {
             上传攻略知识
           </CardTitle>
           <CardDescription className="text-xs">
-            当前版本使用关键词检索，适合 Markdown、纯文本攻略；PDF 文件会按可读文本入库。
+            系统已预置南京、珠海等出行攻略（内置知识库）；您也可上传 Markdown/纯文本补充。检索时会合并内置与自定义内容。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -190,6 +241,54 @@ export function KnowledgePanel() {
           </div>
         </CardContent>
       </GlassCard>
+
+      {editingId ? (
+        <GlassCard className="cursor-default border-primary/25">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between gap-2 text-base">
+              <span className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-primary" />
+                编辑知识文档
+              </span>
+              <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setEditingId(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {editingId?.startsWith("builtin:") ? "内置知识库只读预览。" : "保存后会自动重建分块索引，Agent 将检索到最新内容（动态更新知识）。"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {editingDoc === undefined ? (
+              <p className="text-xs text-muted-foreground">加载文档…</p>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
+                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="城市" disabled={busy} />
+                </div>
+                <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="标签" disabled={busy} />
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  className="min-h-[220px] font-mono text-xs"
+                  disabled={busy || editingId.startsWith("builtin:")}
+                  readOnly={editingId.startsWith("builtin:")}
+                />
+                <div className="flex justify-end gap-2">
+                  {!editingId.startsWith("builtin:") ? (
+                  <Button type="button" className="gap-1.5" disabled={busy || !text.trim()} onClick={() => void handleSaveEdit()}>
+                    保存并重建索引
+                  </Button>
+                  ) : (
+                  <Button type="button" variant="outline" onClick={() => setEditingId(null)}>关闭</Button>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </GlassCard>
+      ) : null}
 
       {error ? (
         <p className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -255,12 +354,19 @@ export function KnowledgePanel() {
           </GlassCard>
         ) : (
           <div className="grid gap-3">
-            {documents.map((doc) => (
+            {documents.map((doc) => {
+              const isBuiltin = "isBuiltin" in doc && doc.isBuiltin === true;
+              return (
               <GlassCard key={doc.id} className="cursor-default">
                 <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate text-sm font-semibold text-foreground">{doc.title}</h3>
+                      {isBuiltin ? (
+                        <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                          内置
+                        </span>
+                      ) : null}
                       <span className="rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
                         {doc.chunkCount} 块
                       </span>
@@ -278,6 +384,12 @@ export function KnowledgePanel() {
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">
+                    {!isBuiltin ? (
+                      <>
+                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={busy} onClick={() => handleStartEdit(doc.id)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      编辑
+                    </Button>
                     <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={busy} onClick={() => void handleRebuild(doc.id)}>
                       <RefreshCcw className="h-3.5 w-3.5" />
                       重建
@@ -293,10 +405,17 @@ export function KnowledgePanel() {
                       <Trash2 className="h-3.5 w-3.5" />
                       删除
                     </Button>
+                      </>
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy} onClick={() => handleStartEdit(doc.id)}>
+                        预览
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </GlassCard>
-            ))}
+            );
+            })}
           </div>
         )}
       </section>

@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../contracts";
+import type { AgentRunMode, ChatMessage } from "../contracts";
 
 /** 判断 Markdown 是否像完整出行方案（含多段二级标题） */
 export function looksLikeFullItinerary(content: string): boolean {
@@ -38,4 +38,36 @@ export function parseTripPlanFromWorkingMemory(workingMemory?: string): string |
 
 export function buildWorkingMemoryWithTripPlan(tripPlanMarkdown: string): string {
   return JSON.stringify({ tripPlanMarkdown });
+}
+
+/** incremental_revise / full 是否应写回 conversations.tripPlanMarkdown */
+export function shouldPatchTripPlanMarkdown(
+  mode: AgentRunMode | undefined,
+  tripPlanMarkdown: string | undefined,
+  updatesMasterPlan?: boolean
+): boolean {
+  if (mode === "quick_reply" || updatesMasterPlan === false) return false;
+  const t = tripPlanMarkdown?.trim() ?? "";
+  if (!t) return false;
+  if (looksLikeFullItinerary(t)) return true;
+  if (mode === "incremental_revise") {
+    return (
+      /##\s*日程/.test(t) ||
+      (/Day\s*\d|第\s*[一二三四五六七八九十\d]+\s*天/i.test(t) && t.length >= 400)
+    );
+  }
+  return false;
+}
+
+/** 从 run_done 事件取右侧行程 Markdown（优先 tripPlanMarkdown，兼容 full 模式旧 payload） */
+export function tripPlanFromRunDone(
+  payload: { summary: string; tripPlanMarkdown?: string },
+  mode?: AgentRunMode
+): string | undefined {
+  const explicit = payload.tripPlanMarkdown?.trim();
+  if (explicit) return explicit;
+  if (mode === "full_plan_execute" && looksLikeFullItinerary(payload.summary)) {
+    return payload.summary.trim();
+  }
+  return undefined;
 }

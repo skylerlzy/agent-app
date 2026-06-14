@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReasoningEvent } from "@/lib/agent/contracts";
+import { tripPlanFromRunDone } from "@/lib/agent/context/tripPlanMemory";
 import { MarkdownTravelBody } from "@/components/agent/MarkdownTravelBody";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -42,8 +43,10 @@ export function AgentRunSummary({ markdown, events = [], isUpdating, className }
   const { summary, thoughts, sections } = useMemo(() => {
     const fromProp = markdown?.trim() ?? "";
     const runDone = [...events].reverse().find((e) => e.type === "run_done");
-    const fromEvents =
-      runDone && runDone.type === "run_done" ? String(runDone.payload.summary ?? "").trim() : "";
+    let fromEvents = "";
+    if (runDone && runDone.type === "run_done") {
+      fromEvents = tripPlanFromRunDone(runDone.payload)?.trim() ?? "";
+    }
 
     const summaryText = fromProp || fromEvents;
 

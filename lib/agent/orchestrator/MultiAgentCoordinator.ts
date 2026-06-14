@@ -9,6 +9,7 @@ import type {
   ILLMClient,
 } from "../contracts";
 import { buildRunDoneSummary, type ToolLogEntry } from "./finalTravelSummary";
+import { buildRunModeEventPayload } from "./runModeDecision";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 
 function flattenSteps(plan: ExecutionPlan) {
@@ -47,7 +48,7 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
 
     const modeEvent = emitter.emit({
       type: "run_mode",
-      payload: { mode: input.runMode ?? "full_plan_execute" },
+      payload: buildRunModeEventPayload(input.runMode ?? "full_plan_execute", input.runModeMeta),
     });
     yield modeEvent;
     await push(modeEvent);

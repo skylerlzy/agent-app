@@ -2,6 +2,7 @@ import type {
   IAutonomousAgent,
   IContextEngine,
   IKnowledgeService,
+  ILLMClient,
   IReflexionPolicy,
   IRunModeRouter,
   ISkillRegistry,
@@ -20,6 +21,8 @@ import { MultiAgentCoordinator } from "./MultiAgentCoordinator";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
 import { RunModeRoutingAgent } from "./RunModeRoutingAgent";
 import { RunModeRouter } from "./RunModeRouter";
+import { HybridRunModeRouter } from "./HybridRunModeRouter";
+import { llmRunModeRouterEnabled } from "./runModeDecision";
 
 export interface AutonomousAgentPipelineDeps {
   skillRegistry?: ISkillRegistry;
@@ -64,7 +67,12 @@ export function createAutonomousAgentPipeline(
   return new RunModeRoutingAgent(full, quick, incremental);
 }
 
-/** 默认 runMode 路由器（供 Convex action 等调用方使用） */
-export function createRunModeRouter(): IRunModeRouter {
-  return new RunModeRouter();
+/** 默认 runMode 路由器：USE_LLM_RUN_MODE_ROUTER 开启时用 LLM 语义分类 + 规则回退 */
+export function createRunModeRouter(deps?: { llm?: ILLMClient }): IRunModeRouter {
+  const fallback = new RunModeRouter();
+  if (llmRunModeRouterEnabled()) {
+    const llm = deps?.llm ?? new OpenAICompatibleClient();
+    return new HybridRunModeRouter(llm, fallback);
+  }
+  return fallback;
 }

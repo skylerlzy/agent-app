@@ -9,7 +9,8 @@ import type {
 } from "../contracts";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
-import { formatAgentKnowledgeContext } from "../knowledge";
+import { buildRunModeEventPayload } from "./runModeDecision";
+import { formatAgentKnowledgeContext, ensureKnowledgeCitations } from "../knowledge";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { inferCityFromText } from "../tools/ToolArgumentValidator";
@@ -63,7 +64,7 @@ export class LightweightWorkflow implements IAutonomousAgent {
 
     const modeEvent = emitter.emit({
       type: "run_mode",
-      payload: { mode: "quick_reply" },
+      payload: buildRunModeEventPayload("quick_reply", input.runModeMeta),
     });
     yield modeEvent;
     await push(modeEvent);
@@ -173,6 +174,8 @@ ${input.goal.rawText}`;
     }
 
     if (!reply) reply = "抱歉，未能从已有行程中找到相关信息，请尝试更具体地描述您的问题。";
+
+    reply = ensureKnowledgeCitations(reply, input.contextBundle?.ragChunks);
 
     const done = emitter.emit({
       type: "run_done",

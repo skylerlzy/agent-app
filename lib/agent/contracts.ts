@@ -168,7 +168,8 @@ export type ReasoningEventType =
   | "reflexion"
   | "step_done"
   | "run_done"
-  | "run_error";
+  | "run_error"
+  | "knowledge_retrieved";
 
 export interface ReasoningEventBase {
   seq: number;
@@ -179,7 +180,15 @@ export interface ReasoningEventBase {
 
 export type ReasoningEvent =
   | (ReasoningEventBase & { type: "session_start"; payload: { goal: string } })
-  | (ReasoningEventBase & { type: "run_mode"; payload: { mode: AgentRunMode } })
+  | (ReasoningEventBase & {
+      type: "run_mode";
+      payload: {
+        mode: AgentRunMode;
+        source?: "llm" | "heuristic" | "override";
+        reason?: string;
+        confidence?: number;
+      };
+    })
   | (ReasoningEventBase & {
       type: "agent_handoff";
       payload: { from: AgentRole; to: AgentRole };
@@ -207,9 +216,25 @@ export type ReasoningEvent =
   | (ReasoningEventBase & { type: "step_done"; payload: { stepId: string } })
   | (ReasoningEventBase & {
       type: "run_done";
-      payload: { summary: string; updatesMasterPlan?: boolean };
+      payload: {
+        /** 写入对话框的本轮回复（增量修订/快速回复为简短说明） */
+        summary: string;
+        updatesMasterPlan?: boolean;
+        /** 写入右侧全程方案面板的完整 Markdown（仅 full / incremental 时有值） */
+        tripPlanMarkdown?: string;
+      };
     })
-  | (ReasoningEventBase & { type: "run_error"; payload: { message: string } });
+  | (ReasoningEventBase & { type: "run_error"; payload: { message: string } })
+  | (ReasoningEventBase & {
+      type: "knowledge_retrieved";
+      payload: {
+        query: string;
+        chunkCount: number;
+        documentTitles: string[];
+        skipped?: boolean;
+        reason?: string;
+      };
+    });
 
 // ---------------------------------------------------------------------------
 // Skill 体系（迭代三 · 成员1）
@@ -340,7 +365,14 @@ export interface IRunModeRouter {
     goalText: string;
     history: ChatMessage[];
     hasExistingPlan: boolean;
-  }): AgentRunMode;
+    /** 已有方案前段摘要，供 LLM 路由理解上下文 */
+    planSummaryHint?: string;
+  }): Promise<{
+    mode: AgentRunMode;
+    source: "llm" | "heuristic" | "override";
+    reason?: string;
+    confidence?: number;
+  }>;
 }
 
 export type AgentRole = "planner" | "tool_runner" | "summarizer";
@@ -360,6 +392,12 @@ export interface AgentRunInput {
   context: UserContext;
   history?: ChatMessage[];
   runMode?: AgentRunMode;
+  /** 路由决策元数据（LLM/规则依据），写入 trace run_mode 事件 */
+  runModeMeta?: {
+    source: "llm" | "heuristic" | "override";
+    reason?: string;
+    confidence?: number;
+  };
   contextBundle?: AgentContextBundle;
   /** 迭代三：本轮激活的 skill id 列表（评测不传时默认 []） */
   activeSkillIds?: string[];

@@ -1,5 +1,6 @@
 import type { AgentContextBundle, KnowledgeChunk, UserMemory } from "../contracts";
 import { formatCitations } from "./formatCitations";
+import { inferKnowledgeCityFromText } from "./inferKnowledgeCity";
 
 export interface ScoredChunkCandidate {
   chunkId: string;
@@ -35,7 +36,11 @@ function extractTerms(query: string): string[] {
   return [...terms].slice(0, 40);
 }
 
-export function scoreKnowledgeChunk(query: string, candidate: ScoredChunkCandidate): number {
+export function scoreKnowledgeChunk(
+  query: string,
+  candidate: ScoredChunkCandidate,
+  opts?: { queryCity?: string }
+): number {
   const terms = extractTerms(query);
   if (!terms.length) return 0;
 
@@ -57,6 +62,13 @@ export function scoreKnowledgeChunk(query: string, candidate: ScoredChunkCandida
     if (firstHit < 240) score += 0.5;
   }
 
+  const queryCity = opts?.queryCity ?? inferKnowledgeCityFromText(query);
+  if (queryCity && candidate.city) {
+    const docCity = candidate.city.replace(/市$/u, "");
+    if (docCity === queryCity) score += 4;
+    else score *= 0.15;
+  }
+
   return score;
 }
 
@@ -66,10 +78,11 @@ export function rankKnowledgeChunks(
   topK = 5
 ): KnowledgeChunk[] {
   const limit = Math.max(1, Math.min(Math.floor(topK), 10));
+  const queryCity = inferKnowledgeCityFromText(query);
   return candidates
     .map((candidate) => ({
       ...candidate,
-      score: scoreKnowledgeChunk(query, candidate),
+      score: scoreKnowledgeChunk(query, candidate, { queryCity }),
     }))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score)

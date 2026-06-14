@@ -1,7 +1,7 @@
 import type { AgentRunInput, ExecutionPlan, ILLMClient, ToolName } from "../contracts";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
-import { formatAgentKnowledgeContext, formatCitations } from "../knowledge";
+import { formatAgentKnowledgeContext, formatCitations, ensureKnowledgeCitations } from "../knowledge";
 
 function flattenSteps(plan: ExecutionPlan) {
   return plan.phases.flatMap((phase) => phase.steps ?? []);
@@ -130,8 +130,13 @@ export async function buildRunDoneSummary(
     return citations ? `${base}\n\n## 知识来源\n\n${citations}` : base;
   }
   try {
-    return await synthesizeTravelMarkdown(llm, input, plan, toolLogs);
+    const md = await synthesizeTravelMarkdown(llm, input, plan, toolLogs);
+    return ensureKnowledgeCitations(md, input.contextBundle?.ragChunks, {
+      sectionHeading: "## 知识来源",
+    });
   } catch {
-    return fallbackMarkdown(plan, toolLogs);
+    const citations = formatCitations(input.contextBundle?.ragChunks ?? []);
+    const base = fallbackMarkdown(plan, toolLogs);
+    return citations ? `${base}\n\n## 知识来源\n\n${citations}` : base;
   }
 }

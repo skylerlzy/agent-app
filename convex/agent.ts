@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
+import { createAutonomousAgentPipeline, createRunModeRouter } from "../lib/agent/orchestrator/factory";
 import { createConfigurableToolRegistry } from "../lib/agent/tools/factory";
 import { OpenAICompatibleClient } from "../lib/agent/llm/OpenAICompatibleClient";
 import type { ToolName, UserToolSetting } from "../lib/agent/contracts";
@@ -31,9 +31,16 @@ import { mergeGoalFromPreferences } from "../lib/agent/runtime/mergeGoalSlots";
 import {
   buildWorkingMemoryWithTripPlan,
   extractTripPlanFromHistory,
-  looksLikeFullItinerary,
+  shouldPatchTripPlanMarkdown,
+  tripPlanFromRunDone,
 } from "../lib/agent/context/tripPlanMemory";
-import { decideRunMode } from "../lib/agent/orchestrator/RunModeRouter";
+import {
+  buildRagQuery,
+  inferKnowledgeCityFromText,
+  shouldRetrieveKnowledge,
+  skipRagReason,
+} from "../lib/agent/knowledge";
+import { SessionEmitter } from "../lib/agent/runtime/SessionEmitter";
 import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
 import { inferCityFromText } from "../lib/agent/tools/ToolArgumentValidator";
 import {
@@ -129,26 +136,15 @@ async function buildAgentInputForConversation(args: {
     }));
 
   const userMessage = allMessages[currentIndex];
-  const goalPreview = mergeGoalFromPreferences(userMessage.content, args.preferences);
-  const ragCity =
-    goalPreview.slots?.destination ??
-    inferCityFromText(userMessage.content) ??
-    inferCityFromText(args.preferences.additionalNotes ?? "") ??
-    undefined;
-  const [longTermMemories, ragChunks]: [UserMemory[], KnowledgeChunk[]] = await Promise.all([
-    args.ctx.runQuery(internal.memories.listLongTermMemoriesInternal, {
+  const longTermMemories: UserMemory[] = await args.ctx.runQuery(
+    internal.memories.listLongTermMemoriesInternal,
+    {
       userId: args.userId,
       conversationId: args.conversationId,
       sharedKnowledgeEnabled: conversation?.sharedKnowledgeEnabled ?? true,
       limit: 12,
-    }),
-    args.ctx.runQuery(internal.knowledge.retrieveInternal, {
-      userId: args.userId,
-      query: userMessage.content,
-      topK: 5,
-      filters: ragCity ? { city: ragCity } : undefined,
-    }),
-  ]);
+    }
+  );
 
   const input = await buildAgentRunInput({
     sessionId: args.sessionId,
@@ -165,9 +161,82 @@ async function buildAgentInputForConversation(args: {
   input.contextBundle = {
     ...input.contextBundle,
     longTermMemories,
-    ragChunks,
+    ragChunks: [],
   };
   return input;
+}
+
+async function enrichInputWithKnowledge(
+  ctx: GenericActionCtx<DataModel>,
+  input: AgentRunInput,
+  userId: string,
+  userMessage: string,
+  preferences: TripPreferences,
+  runMode: AgentRunMode
+): Promise<AgentRunInput> {
+  const goalPreview = mergeGoalFromPreferences(userMessage, preferences);
+  const ragCity =
+    goalPreview.slots?.destination ??
+    inferKnowledgeCityFromText(userMessage) ??
+    inferKnowledgeCityFromText(preferences.additionalNotes ?? "") ??
+    inferCityFromText(userMessage)?.replace(/市$/u, "") ??
+    undefined;
+
+  if (!shouldRetrieveKnowledge({ goalText: userMessage, runMode })) {
+    return {
+      ...input,
+      contextBundle: {
+        ...input.contextBundle,
+        longTermMemories: input.contextBundle?.longTermMemories ?? [],
+        ragChunks: [],
+      },
+    };
+  }
+
+  const ragQuery = buildRagQuery({
+    userMessage,
+    destination: goalPreview.slots?.destination,
+    additionalNotes: preferences.additionalNotes,
+  });
+
+  const ragChunks: KnowledgeChunk[] = await ctx.runQuery(internal.knowledge.retrieveInternal, {
+    userId,
+    query: ragQuery,
+    topK: 5,
+    filters: ragCity ? { city: ragCity } : undefined,
+  });
+
+  return {
+    ...input,
+    contextBundle: {
+      ...input.contextBundle,
+      longTermMemories: input.contextBundle?.longTermMemories ?? [],
+      ragChunks,
+    },
+  };
+}
+
+async function emitKnowledgeRetrievalTrace(
+  traceSink: ITraceSink,
+  sessionId: string,
+  input: {
+    query: string;
+    chunks: KnowledgeChunk[];
+    skipped?: boolean;
+    reason?: string;
+  }
+): Promise<void> {
+  const emitter = new SessionEmitter(sessionId);
+  const event = emitter.emit({
+    type: "knowledge_retrieved",
+    payload: {
+      query: input.query,
+      chunkCount: input.chunks.length,
+      documentTitles: [...new Set(input.chunks.map((c) => c.documentTitle))],
+      ...(input.skipped ? { skipped: true, reason: input.reason } : {}),
+    },
+  });
+  await traceSink.emit(event);
 }
 
 async function enrichInputWithSkills(
@@ -402,20 +471,24 @@ async function runAgentInConversationHandler(
     }
   }
 
-  const resolvedMode =
-    args.runMode ??
-    decideRunMode({
-      goalText: userMessageRow.content,
-      history: input.history ?? [],
-      hasExistingPlan: Boolean(tripPlan),
-    });
+  const modeDecision = args.runMode
+    ? { mode: args.runMode, source: "override" as const }
+    : await createRunModeRouter({ llm: new OpenAICompatibleClient() }).decide({
+        goalText: userMessageRow.content,
+        history: input.history ?? [],
+        hasExistingPlan: Boolean(tripPlan),
+        planSummaryHint: tripPlan ? tripPlan.slice(0, 900) : undefined,
+      });
+  const resolvedMode = modeDecision.mode;
   input.runMode = resolvedMode;
+  if (modeDecision.source !== "override") {
+    input.runModeMeta = {
+      source: modeDecision.source,
+      reason: modeDecision.reason,
+      confidence: modeDecision.confidence,
+    };
+  }
   input = await enrichInputWithSkills(ctx, input, userId);
-  input = await optimizeInputContext({
-    ctx,
-    input,
-    conversationId: args.conversationId,
-  });
 
   const traceSink: ITraceSink = {
     emit: async (event: ReasoningEvent) => {
@@ -425,6 +498,42 @@ async function runAgentInConversationHandler(
       });
     },
   };
+
+  input = await enrichInputWithKnowledge(
+    ctx,
+    input,
+    userId,
+    userMessageRow.content,
+    args.preferences ?? {},
+    resolvedMode
+  );
+
+  const ragQuery = buildRagQuery({
+    userMessage: userMessageRow.content,
+    destination: mergeGoalFromPreferences(userMessageRow.content, args.preferences ?? {}).slots
+      ?.destination,
+    additionalNotes: args.preferences?.additionalNotes,
+  });
+
+  if (shouldRetrieveKnowledge({ goalText: userMessageRow.content, runMode: resolvedMode })) {
+    await emitKnowledgeRetrievalTrace(traceSink, args.sessionId, {
+      query: ragQuery,
+      chunks: input.contextBundle?.ragChunks ?? [],
+    });
+  } else {
+    await emitKnowledgeRetrievalTrace(traceSink, args.sessionId, {
+      query: ragQuery,
+      chunks: [],
+      skipped: true,
+      reason: skipRagReason(userMessageRow.content, resolvedMode),
+    });
+  }
+
+  input = await optimizeInputContext({
+    ctx,
+    input,
+    conversationId: args.conversationId,
+  });
 
   const events = await executeAgentPipeline(
     ctx,
@@ -443,6 +552,10 @@ async function runAgentInConversationHandler(
   const runDone = [...events].reverse().find((e) => e.type === "run_done");
   const updatesMasterPlan =
     runDone?.type === "run_done" ? runDone.payload.updatesMasterPlan : undefined;
+  const tripPlanForPanel =
+    runDone?.type === "run_done"
+      ? tripPlanFromRunDone(runDone.payload, resolvedMode)
+      : undefined;
 
   if (summary) {
     await ctx.runMutation(internal.messages.patchMessageContentInternal, {
@@ -452,10 +565,10 @@ async function runAgentInConversationHandler(
 
     if (resolvedMode === "quick_reply") {
       /* 复述/问答：不覆盖全程方案与对话级摘要 */
-    } else if (updatesMasterPlan !== false && looksLikeFullItinerary(summary)) {
+    } else if (shouldPatchTripPlanMarkdown(resolvedMode, tripPlanForPanel, updatesMasterPlan)) {
       await ctx.runMutation(internal.conversations.patchTripPlanInternal, {
         conversationId: args.conversationId,
-        tripPlanMarkdown: summary,
+        tripPlanMarkdown: tripPlanForPanel!,
       });
       await ctx.runMutation(internal.conversations.patchSummaryInternal, {
         conversationId: args.conversationId,
