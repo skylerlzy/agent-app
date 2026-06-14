@@ -125,6 +125,9 @@ export const checkEnvStatus = action({
       QWEATHER_API_KEY: check("QWEATHER_API_KEY"),
       QWEATHER_API_HOST: check("QWEATHER_API_HOST"),
       AMAP_WEBSERVICE_KEY: check("AMAP_WEBSERVICE_KEY"),
+      ALIYUN_RAIL_APPCODE: check("ALIYUN_RAIL_APPCODE"),
+      ALIYUN_RAIL_APP_KEY: check("ALIYUN_RAIL_APP_KEY"),
+      ALIYUN_RAIL_APP_SECRET: check("ALIYUN_RAIL_APP_SECRET"),
     };
   },
 });

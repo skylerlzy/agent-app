@@ -21,11 +21,13 @@ import {
   parsePreferencesJson,
   serializePreferencesJson,
   toTripPreferences,
+  defaultPreferences,
   type ConversationPreferences,
   type MessageStatus,
   type StoredChatMessage,
 } from "@/lib/conversationStorage";
 import { extractTripPlanFromHistory } from "@/lib/agent/context/tripPlanMemory";
+import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 import { cn } from "@/lib/utils";
 import { Brain, Send, Rocket } from "lucide-react";
 
@@ -131,7 +133,12 @@ export function AgentWorkspace() {
   const [runError, setRunError] = useState<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const creatingRef = useRef(false);
+  /** 新建/删除后等待 Convex 列表刷新，避免 useEffect 把 activeId 抢回旧对话 */
+  const pendingSelectIdRef = useRef<Id<"conversations"> | null>(null);
   const finishedSessionsRef = useRef<Set<string>>(new Set());
+  const [draftPreferences, setDraftPreferences] = useState<ConversationPreferences>(() =>
+    defaultPreferences()
+  );
 
   const conversations = useQuery(api.conversations.listByUser);
   const messageRows = useQuery(
@@ -151,10 +158,13 @@ export function AgentWorkspace() {
     [conversations, activeId]
   );
 
-  const preferences = useMemo(
-    () => parsePreferencesJson(activeConversation?.preferencesJson),
-    [activeConversation?.preferencesJson]
-  );
+  /** 切换对话时从服务端同步偏好（不触发写回 Convex） */
+  useEffect(() => {
+    if (!activeId || conversations === undefined) return;
+    const conv = conversations.find((c) => c._id === activeId);
+    if (!conv) return;
+    setDraftPreferences(parsePreferencesJson(conv.preferencesJson));
+  }, [activeId, conversations]);
 
   const activeSkillIds = useMemo(
     () => activeConversation?.activeSkillIds ?? EMPTY_SKILL_IDS,
@@ -185,19 +195,36 @@ export function AgentWorkspace() {
   /** 首次进入：选中最新对话，若无则创建 */
   useEffect(() => {
     if (conversations === undefined) return;
+
     if (conversations.length === 0) {
       if (creatingRef.current) return;
       creatingRef.current = true;
       void createConversation({})
-        .then((id) => setActiveId(id))
+        .then((id) => {
+          pendingSelectIdRef.current = id;
+          setActiveId(id);
+        })
         .finally(() => {
           creatingRef.current = false;
         });
       return;
     }
-    if (!activeId || !conversations.some((c) => c._id === activeId)) {
-      setActiveId(conversations[0]._id);
+
+    const pending = pendingSelectIdRef.current;
+    if (pending) {
+      if (conversations.some((c) => c._id === pending)) {
+        pendingSelectIdRef.current = null;
+        return;
+      }
+      if (activeId !== pending) setActiveId(pending);
+      return;
     }
+
+    if (activeId && conversations.some((c) => c._id === activeId)) {
+      return;
+    }
+
+    setActiveId(conversations[0]._id);
   }, [conversations, activeId, createConversation]);
 
   const summaryEvents = useMemo(() => liveEvents ?? [], [liveEvents]);
@@ -239,30 +266,45 @@ export function AgentWorkspace() {
   }, [liveEvents, activeSessionId]);
 
   const handleNew = useCallback(async () => {
-    const id = await createConversation({});
-    setActiveId(id);
-    setDraft("");
-    setRunError(null);
+    try {
+      const id = await createConversation({});
+      pendingSelectIdRef.current = id;
+      setActiveId(id);
+      setDraft("");
+      setRunError(null);
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : String(e));
+    }
   }, [createConversation]);
 
   const handleRename = useCallback(
     async (id: string, title: string) => {
-      await updateTitle({ conversationId: id as Id<"conversations">, title });
+      try {
+        await updateTitle({ conversationId: id as Id<"conversations">, title });
+      } catch (e) {
+        setRunError(e instanceof Error ? e.message : String(e));
+      }
     },
     [updateTitle]
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteConversation({ conversationId: id as Id<"conversations"> });
-      if (activeId === id) {
-        const remaining = conversations?.filter((c) => c._id !== id) ?? [];
-        if (remaining.length > 0) {
-          setActiveId(remaining[0]._id);
-        } else {
-          const fresh = await createConversation({});
-          setActiveId(fresh);
+      try {
+        await deleteConversation({ conversationId: id as Id<"conversations"> });
+        if (activeId != null && String(activeId) === String(id)) {
+          const remaining = conversations?.filter((c) => String(c._id) !== String(id)) ?? [];
+          if (remaining.length > 0) {
+            pendingSelectIdRef.current = null;
+            setActiveId(remaining[0]._id);
+          } else {
+            const fresh = await createConversation({});
+            pendingSelectIdRef.current = fresh;
+            setActiveId(fresh);
+          }
         }
+      } catch (e) {
+        setRunError(e instanceof Error ? e.message : String(e));
       }
     },
     [activeId, conversations, createConversation, deleteConversation]
@@ -273,47 +315,77 @@ export function AgentWorkspace() {
       prefs: ConversationPreferences,
       skillIds: string[],
       toolNames: ToolName[],
-      sharedEnabled = sharedKnowledgeEnabled
+      sharedEnabled = sharedKnowledgeEnabled,
+      prefsOnly = false
     ) => {
       if (!activeId) return;
       await updatePreferencesMut({
         conversationId: activeId,
         preferencesJson: serializePreferencesJson(prefs),
-        activeSkillIds: skillIds,
-        enabledToolNames: toolNames,
-        sharedKnowledgeEnabled: sharedEnabled,
+        ...(prefsOnly
+          ? {}
+          : {
+              activeSkillIds: skillIds,
+              enabledToolNames: toolNames,
+              sharedKnowledgeEnabled: sharedEnabled,
+            }),
       });
     },
     [activeId, sharedKnowledgeEnabled, updatePreferencesMut]
   );
 
+  const debouncedPersistPreferences = useDebouncedCallback(
+    (prefs: ConversationPreferences) => {
+      void persistConversationMeta(prefs, activeSkillIds, enabledToolNames, sharedKnowledgeEnabled, true).catch(
+        (e) => {
+          setRunError(e instanceof Error ? e.message : String(e));
+        }
+      );
+    },
+    450
+  );
+
   const handlePreferencesChange = useCallback(
     (prefs: ConversationPreferences) => {
-      void persistConversationMeta(prefs, activeSkillIds, enabledToolNames);
+      setDraftPreferences(prefs);
+      debouncedPersistPreferences(prefs);
     },
-    [activeSkillIds, enabledToolNames, persistConversationMeta]
+    [debouncedPersistPreferences]
   );
 
   const handleSkillIdsChange = useCallback(
     (skillIds: string[]) => {
-      void persistConversationMeta(preferences, skillIds, enabledToolNames);
+      void persistConversationMeta(draftPreferences, skillIds, enabledToolNames).catch((e) => {
+        setRunError(e instanceof Error ? e.message : String(e));
+      });
     },
-    [enabledToolNames, preferences, persistConversationMeta]
+    [draftPreferences, enabledToolNames, persistConversationMeta]
   );
 
   const handleToolNamesChange = useCallback(
     (toolNames: ToolName[]) => {
-      void persistConversationMeta(preferences, activeSkillIds, toolNames);
+      void persistConversationMeta(draftPreferences, activeSkillIds, toolNames).catch((e) => {
+        setRunError(e instanceof Error ? e.message : String(e));
+      });
     },
-    [activeSkillIds, preferences, persistConversationMeta]
+    [activeSkillIds, draftPreferences, persistConversationMeta]
   );
 
   const handleSharedKnowledgeChange = useCallback(
     (enabled: boolean) => {
-      void persistConversationMeta(preferences, activeSkillIds, enabledToolNames, enabled);
+      void persistConversationMeta(draftPreferences, activeSkillIds, enabledToolNames, enabled).catch(
+        (e) => {
+          setRunError(e instanceof Error ? e.message : String(e));
+        }
+      );
     },
-    [activeSkillIds, enabledToolNames, preferences, persistConversationMeta]
+    [activeSkillIds, draftPreferences, enabledToolNames, persistConversationMeta]
   );
+
+  const handleSelectConversation = useCallback((id: string) => {
+    pendingSelectIdRef.current = null;
+    setActiveId(id as Id<"conversations">);
+  }, []);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -322,7 +394,7 @@ export function AgentWorkspace() {
       return;
     }
 
-    const prefErr = validatePreferences(preferences);
+    const prefErr = validatePreferences(draftPreferences);
     if (prefErr) {
       setRunError(prefErr);
       return;
@@ -336,7 +408,7 @@ export function AgentWorkspace() {
       const { sessionId } = await sendUserMessage({
         conversationId: activeId,
         content: text,
-        preferences: toTripPreferences(preferences),
+        preferences: toTripPreferences(draftPreferences),
         activeSkillIds,
         enabledToolNames: enabledToolNames.length > 0 ? enabledToolNames : undefined,
       });
@@ -347,7 +419,7 @@ export function AgentWorkspace() {
       setRunError(msg);
       setLoading(false);
     }
-  }, [draft, activeId, preferences, activeSkillIds, enabledToolNames, sendUserMessage]);
+  }, [draft, activeId, draftPreferences, activeSkillIds, enabledToolNames, sendUserMessage]);
 
   if (conversations === undefined) {
     return (
@@ -363,7 +435,7 @@ export function AgentWorkspace() {
         className="max-h-44 shrink-0 lg:hidden"
         conversations={listItems}
         activeId={activeId}
-        onSelect={(id) => setActiveId(id as Id<"conversations">)}
+        onSelect={handleSelectConversation}
         onNew={() => void handleNew()}
         onRename={(id, title) => void handleRename(id, title)}
         onDelete={(id) => void handleDelete(id)}
@@ -374,7 +446,7 @@ export function AgentWorkspace() {
           className="hidden min-h-0 lg:flex"
           conversations={listItems}
           activeId={activeId}
-          onSelect={(id) => setActiveId(id as Id<"conversations">)}
+          onSelect={handleSelectConversation}
           onNew={() => void handleNew()}
           onRename={(id, title) => void handleRename(id, title)}
           onDelete={(id) => void handleDelete(id)}
@@ -414,7 +486,7 @@ export function AgentWorkspace() {
                   onChange={handleToolNamesChange}
                   disabled={loading}
                 />
-                <TripPreferencesPanel preferences={preferences} onChange={handlePreferencesChange} disabled={loading} />
+                <TripPreferencesPanel preferences={draftPreferences} onChange={handlePreferencesChange} disabled={loading} />
               </>
             ) : null}
 

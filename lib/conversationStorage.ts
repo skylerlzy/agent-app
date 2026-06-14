@@ -143,5 +143,6 @@ export function parsePreferencesJson(json?: string | null): ConversationPreferen
 }
 
 export function serializePreferencesJson(prefs: ConversationPreferences): string {
-  return JSON.stringify(prefs);
+  const safe = { ...defaultPreferences(), ...prefs };
+  return JSON.stringify(safe);
 }

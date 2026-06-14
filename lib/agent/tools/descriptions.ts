@@ -18,8 +18,8 @@ export const TOOL_ENV_REQUIREMENTS: Record<
     label: "高德 POI 检索",
   },
   rail_schedule_hint: {
-    envKeys: [],
-    label: "无需外部 Key（提示型）",
+    envKeys: ["ALIYUN_RAIL_APPCODE"],
+    label: "阿里云云市场火车查询（cmapi033685）",
   },
 };
 
@@ -32,7 +32,7 @@ export const TOOL_LLM_DESCRIPTIONS: Record<ToolName, string> = {
   poi_search:
     "高德 POI 关键词检索：按城市+关键词搜索景点、餐饮、酒店等，返回结构化列表（名称、地址、类型、坐标）。适用于规划阶段收集候选 POI，参数 keywords 与 city 均必填。",
   rail_schedule_hint:
-    "铁路出行提示（非 12306 实时数据）：根据起讫城市给出高铁/动车出行注意事项与查询指引，含免责声明。适用于跨城段规划前的方向性建议，不能替代官方购票与时刻表。",
+    "阿里云云市场火车查询（cmapi033685）：按起讫站名与可选 dateIso（YYYY-MM-DD）查询车次、时刻、历时、席别票价与余票概况。参数 originCity/destinationCity 建议用中文站名（如「南京南」「上海虹桥」）。含免责声明，购票以 12306 为准。",
 };
 
 /** 工具中文展示名 */
@@ -40,7 +40,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
   weather_forecast: "天气预报",
   maps_route_estimate: "路线耗时估算",
   poi_search: "POI 景点检索",
-  rail_schedule_hint: "铁路出行提示",
+  rail_schedule_hint: "铁路车次查询",
 };
 
 export function buildToolsPromptSection(names?: ToolName[]): string {

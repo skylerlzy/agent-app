@@ -49,6 +49,18 @@ const FULL_PLAN_PATTERNS: RegExp[] = [
   /帮我.*游/,
   /想去/,
   /出行方案/,
+  /攻略/,
+  /度假/,
+];
+
+/** 隐含出行规划意图（短句也须走 full，如「从南京去珠海玩」） */
+const TRAVEL_INTENT_PATTERNS: RegExp[] = [
+  /从.+?(?:去|到|飞).+?(?:玩|旅|游)/,
+  /(?:去|到|飞).{2,}?(?:玩|旅(?:游|行)|度假)/,
+  /(?:周末|假期|小长假|国庆|春节).*(?:去|玩|游|旅)/,
+  /出(?:游|行)/,
+  /自由行/,
+  /自(?:助|驾)游/,
 ];
 
 const FORCE_FULL_PATTERNS: RegExp[] = [/重新规划/, /全新/, /另起/, /从头/, /重做/];
@@ -101,18 +113,21 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
   const isRecap = RECAP_PATTERNS.some((p) => p.test(text));
   const isRevise = REVISE_PATTERNS.some((p) => p.test(text));
   const wantsNewPlan = FULL_PLAN_PATTERNS.some((p) => p.test(text));
+  const hasTravelIntent = TRAVEL_INTENT_PATTERNS.some((p) => p.test(text));
+  const needsFullPlan = wantsNewPlan || hasTravelIntent;
   const isSimpleQa = SIMPLE_QA_PATTERNS.some((p) => p.test(text));
   const needsPlanLevelTool =
-    TOOL_NEEDED_IN_PLAN_PATTERNS.some((p) => p.test(text)) && wantsNewPlan;
+    TOOL_NEEDED_IN_PLAN_PATTERNS.some((p) => p.test(text)) && needsFullPlan;
 
-  if (isSimpleQa && !wantsNewPlan && !isRevise) {
+  if (isSimpleQa && !needsFullPlan && !isRevise) {
     return "quick_reply";
   }
 
   if (!input.hasExistingPlan) {
-    if (wantsNewPlan || needsPlanLevelTool) return "full_plan_execute";
+    if (needsFullPlan || needsPlanLevelTool) return "full_plan_execute";
     if (isRevise) return "full_plan_execute";
-    if (text.length <= 80) return "quick_reply";
+    // 新对话默认完整规划；勿因短句误判 quick（如「从南京去珠海玩」）
+    if (isSimpleQa) return "quick_reply";
     return "full_plan_execute";
   }
 
@@ -124,11 +139,11 @@ export function decideRunMode(input: RunModeRouterInput): AgentRunMode {
     return "incremental_revise";
   }
 
-  if (wantsNewPlan && !isRecap) {
+  if (needsFullPlan && !isRecap) {
     return "full_plan_execute";
   }
 
-  if (!isRevise && !wantsNewPlan && text.length <= 80) {
+  if (!isRevise && !needsFullPlan && text.length <= 80) {
     return "quick_reply";
   }
 

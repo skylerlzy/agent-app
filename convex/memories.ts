@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireUserId } from "./authHelpers";
+import { conversationIdKey } from "./conversationIds";
 import { extractMemoryCandidates, type MemoryKind } from "../lib/agent/knowledge";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -90,7 +91,9 @@ export const create = mutation({
       content,
       createdAt: now,
       updatedAt: now,
-      ...(args.sourceConversationId ? { sourceConversationId: args.sourceConversationId } : {}),
+      ...(args.sourceConversationId
+        ? { sourceConversationId: conversationIdKey(args.sourceConversationId) }
+        : {}),
     };
     const id = await ctx.db.insert("userMemories", insert);
     return id;
@@ -157,7 +160,9 @@ export const listLongTermMemoriesInternal = internalQuery({
         ? await ctx.db
             .query("userMemories")
             .withIndex("by_user_sourceConversation", (q) =>
-              q.eq("userId", args.userId).eq("sourceConversationId", args.conversationId)
+              q
+                .eq("userId", args.userId)
+                .eq("sourceConversationId", conversationIdKey(args.conversationId!))
             )
             .take(take)
         : [];
@@ -195,7 +200,7 @@ export const extractFromTurnInternal = internalMutation({
         userId: args.userId,
         kind: candidate.kind as MemoryKind,
         content,
-        sourceConversationId: args.conversationId,
+        sourceConversationId: conversationIdKey(args.conversationId),
         createdAt: now,
         updatedAt: now,
       });

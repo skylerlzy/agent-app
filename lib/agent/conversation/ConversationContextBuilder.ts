@@ -7,6 +7,7 @@ import type {
   TripPreferences,
   ToolName,
 } from "../contracts";
+import { mergeGoalFromPreferences } from "../runtime/mergeGoalSlots";
 
 export interface ConversationContextBuilderArgs {
   sessionId: string;
@@ -35,9 +36,7 @@ export class ConversationContextBuilder implements IConversationContextBuilder {
     return {
       sessionId: args.sessionId,
       conversationId: args.conversationId,
-      goal: {
-        rawText: args.userMessage,
-      },
+      goal: mergeGoalFromPreferences(args.userMessage, args.preferences),
       context: {
         userId: args.userId,
         preferences: args.preferences,

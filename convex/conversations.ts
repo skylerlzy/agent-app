@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireUserId } from "./authHelpers";
 import { autoTitleFromMessage } from "../lib/conversationStorage";
+import { conversationIdKey } from "./conversationIds";
 
 function sortByUpdatedAtDesc<T extends { updatedAt: number }>(items: T[]) {
   return [...items].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -27,13 +28,21 @@ export const listByUser = query({
     const sorted = sortByUpdatedAtDesc(rows);
     return Promise.all(
       sorted.map(async (c) => {
-        const messages = await ctx.db
-          .query("messages")
-          .withIndex("by_conversation", (q) => q.eq("conversationId", c._id))
-          .collect();
+        let messageCount = 0;
+        try {
+          const messages = await ctx.db
+            .query("messages")
+            .withIndex("by_conversation", (q) =>
+              q.eq("conversationId", conversationIdKey(c._id))
+            )
+            .collect();
+          messageCount = messages.length;
+        } catch {
+          messageCount = 0;
+        }
         return {
           ...c,
-          messageCount: messages.length,
+          messageCount,
         };
       })
     );
@@ -92,13 +101,35 @@ export const updatePreferences = mutation({
     if (!row || row.userId !== userId) {
       throw new Error("对话不存在或无权访问。");
     }
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.preferencesJson !== undefined) patch.preferencesJson = args.preferencesJson;
-    if (args.activeSkillIds !== undefined) patch.activeSkillIds = args.activeSkillIds;
-    if (args.enabledToolNames !== undefined) patch.enabledToolNames = args.enabledToolNames;
+
+    const patch: {
+      updatedAt: number;
+      preferencesJson?: string;
+      activeSkillIds?: string[];
+      enabledToolNames?: string[];
+      sharedKnowledgeEnabled?: boolean;
+    } = { updatedAt: Date.now() };
+
+    if (args.preferencesJson !== undefined) {
+      if (typeof args.preferencesJson !== "string") {
+        throw new Error("preferencesJson 格式无效。");
+      }
+      patch.preferencesJson = args.preferencesJson;
+    }
+    if (args.activeSkillIds !== undefined) {
+      patch.activeSkillIds = args.activeSkillIds.filter(
+        (id): id is string => typeof id === "string" && id.length > 0
+      );
+    }
+    if (args.enabledToolNames !== undefined) {
+      patch.enabledToolNames = args.enabledToolNames.filter(
+        (name): name is string => typeof name === "string" && name.length > 0
+      );
+    }
     if (args.sharedKnowledgeEnabled !== undefined) {
       patch.sharedKnowledgeEnabled = args.sharedKnowledgeEnabled;
     }
+
     await ctx.db.patch(args.conversationId, patch);
   },
 });
@@ -140,12 +171,28 @@ export const deleteConversation = mutation({
       throw new Error("对话不存在或无权访问。");
     }
 
+    const convKey = conversationIdKey(conversationId);
+
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+      .withIndex("by_conversation", (q) => q.eq("conversationId", convKey))
       .collect();
     for (const m of messages) {
       await ctx.db.delete(m._id);
+    }
+
+    try {
+      const memories = await ctx.db
+        .query("userMemories")
+        .withIndex("by_user_sourceConversation", (q) =>
+          q.eq("userId", userId).eq("sourceConversationId", convKey)
+        )
+        .collect();
+      for (const mem of memories) {
+        await ctx.db.delete(mem._id);
+      }
+    } catch {
+      /* 记忆清理失败不阻断对话删除 */
     }
 
     await ctx.db.delete(conversationId);
@@ -164,7 +211,9 @@ export const maybeAutoTitleInternal = internalMutation({
 
     const userMsgs = await ctx.db
       .query("messages")
-      .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", conversationIdKey(conversationId))
+      )
       .filter((q) => q.eq(q.field("role"), "user"))
       .collect();
 

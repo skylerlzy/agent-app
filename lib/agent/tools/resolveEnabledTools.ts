@@ -1,6 +1,6 @@
 import { TOOL_NAMES, type ToolName, type UserToolSetting } from "../contracts";
 
-/** 合并对话级与用户级工具开关，得到本轮可用工具名；undefined 表示默认全开 */
+/** 合并对话级与用户级工具开关，得到本轮可用工具名；undefined 或 [] 表示默认全开 */
 export function resolveEnabledToolNames(
   userSettings: UserToolSetting[],
   conversationEnabled?: string[] | null

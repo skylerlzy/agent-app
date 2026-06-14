@@ -6,6 +6,7 @@ import { z } from "zod";
 import { fetchWithTimeout } from "../http/fetchWithTimeout";
 import type { ToolContext, ToolDefinition, ToolResult } from "../contracts";
 import { TOOL_LLM_DESCRIPTIONS } from "./descriptions";
+import { queryAliyunRailTrains, requireAliyunRailAppCode } from "./aliyunRailClient";
 import { inferCityFromText } from "./ToolArgumentValidator";
 
 function toolHttpTimeoutMs(): number {
@@ -1027,11 +1028,11 @@ const railArgs = z.object({
 });
 
 const RAIL_DISCLAIMER =
-  "【免责声明】本工具不提供 12306 实时余票、票价或精确时刻表，仅供参考。购票与改签请以中国铁路 12306 官方渠道为准。";
+  "【免责声明】数据来自阿里云云市场第三方接口，可能与 12306 存在延迟或差异。购票、改签与退票请以中国铁路 12306 官方渠道为准。";
 
 export const railScheduleHintTool: ToolDefinition<
   z.infer<typeof railArgs>,
-  { hints: string[]; disclaimer: string }
+  Record<string, unknown>
 > = {
   name: "rail_schedule_hint",
   description: TOOL_LLM_DESCRIPTIONS.rail_schedule_hint,
@@ -1039,37 +1040,49 @@ export const railScheduleHintTool: ToolDefinition<
   async execute(args): Promise<ToolResult<any>> {
     const origin = args.originCity.trim();
     const dest = args.destinationCity.trim();
-    const dateNote = args.dateIso?.trim()
-      ? `计划出行日 ${args.dateIso}（须以 12306 当日开行方案为准）。`
-      : "未指定日期时，请在 12306 选择具体乘车日查询。";
 
-    const sameCity = origin.replace(/市$/u, "") === dest.replace(/市$/u, "");
-    const hints: string[] = [
-      RAIL_DISCLAIMER,
-      `起讫：${origin} → ${dest}。${dateNote}`,
-    ];
-
-    if (sameCity) {
-      hints.push("起讫同城：市内出行优先地铁/公交；若误用于铁路查询请改用 maps_route_estimate。");
-    } else {
-      hints.push(
-        "跨城高铁/动车：建议在 12306 搜索「车站名」而非仅城市名（如「南京南」「上海虹桥」）。",
-        "换乘：关注「同站换乘」与「异站换乘」时间缓冲，大站建议预留 30–45 分钟。",
-        "节假日与周五晚高峰余票紧张，可关注候补购票。"
-      );
+    try {
+      requireAliyunRailAppCode();
+    } catch (e) {
+      return {
+        ok: false,
+        error: {
+          code: "RAIL_APPCODE_MISSING",
+          message: e instanceof Error ? e.message : "未配置 ALIYUN_RAIL_APPCODE",
+          retryable: false,
+        },
+      };
     }
 
-    return {
-      ok: true,
-      data: {
-        originCity: origin,
-        destinationCity: dest,
+    try {
+      const data = await queryAliyunRailTrains({
+        start: origin,
+        end: dest,
         dateIso: args.dateIso,
-        hints,
-        disclaimer: RAIL_DISCLAIMER,
-        note: "提示型结果，非实时班次数据。",
-        doNotRetrySameArgs: true,
-      },
-    };
+      });
+
+      return {
+        ok: true,
+        data: {
+          ...data,
+          originCity: origin,
+          destinationCity: dest,
+          dateIso: data.queryDate,
+          disclaimer: RAIL_DISCLAIMER,
+          note: data.taskNote,
+          doNotRetrySameArgs: data.trains.length > 0,
+        },
+      };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "阿里云铁路查询失败";
+      return {
+        ok: false,
+        error: {
+          code: "RAIL_API_ERROR",
+          message,
+          retryable: true,
+        },
+      };
+    }
   },
 };

@@ -11,6 +11,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { createAutonomousAgentPipeline } from "../lib/agent/orchestrator/factory";
 import { createConfigurableToolRegistry } from "../lib/agent/tools/factory";
+import { OpenAICompatibleClient } from "../lib/agent/llm/OpenAICompatibleClient";
 import type { ToolName, UserToolSetting } from "../lib/agent/contracts";
 import type {
   AgentRunInput,
@@ -25,6 +26,8 @@ import type {
 } from "../lib/agent/contracts";
 import { buildAgentRunInput } from "../lib/agent/conversation/ConversationContextBuilder";
 import { ContextEngine } from "../lib/agent/context/ContextEngine";
+import { appendSkillSection } from "../lib/agent/skills/appendSkillSection";
+import { mergeGoalFromPreferences } from "../lib/agent/runtime/mergeGoalSlots";
 import {
   buildWorkingMemoryWithTripPlan,
   extractTripPlanFromHistory,
@@ -32,11 +35,13 @@ import {
 } from "../lib/agent/context/tripPlanMemory";
 import { decideRunMode } from "../lib/agent/orchestrator/RunModeRouter";
 import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
+import { inferCityFromText } from "../lib/agent/tools/ToolArgumentValidator";
 import {
   activeSkillIdsValidator,
   runModeValidator,
   runPreferencesValidator,
 } from "./runValidators";
+import { sameConversationId } from "./conversationIds";
 
 const runSlotsValidator = v.optional(
   v.object({
@@ -62,27 +67,12 @@ type RunBody = {
 
 function buildAgentInput(args: RunBody, userId: string): AgentRunInput {
   const pref = args.preferences ?? {};
-  const baseSlots = args.slots ?? {};
-  const mergedSlots = {
-    ...baseSlots,
-    startDateIso: pref.tripStartDateIso ?? baseSlots.startDateIso,
-    endDateIso: pref.tripEndDateIso ?? baseSlots.endDateIso,
-    pace: pref.pace ?? baseSlots.pace,
-    budgetCny: pref.budgetCny ?? baseSlots.budgetCny,
-  };
-  const goalSlots = Object.fromEntries(
-    Object.entries(mergedSlots).filter(([, v]) => v !== undefined && v !== null && v !== "")
-  );
-  const slotsOut =
-    Object.keys(goalSlots).length > 0 ? (goalSlots as UserGoal["slots"]) : undefined;
+  const goal = mergeGoalFromPreferences(args.goalRaw, pref, args.slots);
 
   return {
     sessionId: args.sessionId,
     conversationId: args.conversationId,
-    goal: {
-      rawText: args.goalRaw,
-      slots: slotsOut,
-    },
+    goal,
     context: {
       userId,
       preferences: pref,
@@ -139,6 +129,12 @@ async function buildAgentInputForConversation(args: {
     }));
 
   const userMessage = allMessages[currentIndex];
+  const goalPreview = mergeGoalFromPreferences(userMessage.content, args.preferences);
+  const ragCity =
+    goalPreview.slots?.destination ??
+    inferCityFromText(userMessage.content) ??
+    inferCityFromText(args.preferences.additionalNotes ?? "") ??
+    undefined;
   const [longTermMemories, ragChunks]: [UserMemory[], KnowledgeChunk[]] = await Promise.all([
     args.ctx.runQuery(internal.memories.listLongTermMemoriesInternal, {
       userId: args.userId,
@@ -150,6 +146,7 @@ async function buildAgentInputForConversation(args: {
       userId: args.userId,
       query: userMessage.content,
       topK: 5,
+      filters: ragCity ? { city: ragCity } : undefined,
     }),
   ]);
 
@@ -197,7 +194,7 @@ async function buildToolRegistryForRun(
     { userId }
   );
   const conversationOverride =
-    input.enabledToolNames !== undefined
+    input.enabledToolNames !== undefined && input.enabledToolNames.length > 0
       ? (input.enabledToolNames as ToolName[])
       : undefined;
   return createConfigurableToolRegistry({
@@ -271,20 +268,27 @@ async function optimizeInputContext(args: {
   input: AgentRunInput;
   conversationId?: Id<"conversations">;
 }): Promise<AgentRunInput> {
-  const engine = new ContextEngine();
-  const result = await engine.optimizeAgentInput(args.input, {
-    systemBase:
+  try {
+    const engine = new ContextEngine({ summarizer: new OpenAICompatibleClient() });
+    const systemBase = appendSkillSection(
       "你是智能出行自治助手。以下上下文已按成员4上下文工程策略裁剪：摘要保留长期约束，近期对话由远及近，工作记忆保存当前行程。",
-  });
-
-  if (args.conversationId && result.updatedSummary?.trim()) {
-    await args.ctx.runMutation(internal.conversations.patchSummaryInternal, {
-      conversationId: args.conversationId,
-      summary: result.updatedSummary.slice(0, 2000),
+      args.input.skillSystemSection
+    );
+    const result = await engine.optimizeAgentInput(args.input, {
+      systemBase,
     });
-  }
 
-  return result.input;
+    if (args.conversationId && result.updatedSummary?.trim()) {
+      await args.ctx.runMutation(internal.conversations.patchSummaryInternal, {
+        conversationId: args.conversationId,
+        summary: result.updatedSummary.slice(0, 2000),
+      });
+    }
+
+    return result.input;
+  } catch {
+    return args.input;
+  }
 }
 
 function summarizeFromEvents(events: ReasoningEvent[]): string {
@@ -345,7 +349,7 @@ async function runAgentInConversationHandler(
   });
   if (
     !userMessageRow ||
-    userMessageRow.conversationId !== args.conversationId ||
+    !sameConversationId(userMessageRow.conversationId, args.conversationId) ||
     userMessageRow.role !== "user"
   ) {
     throw new Error("无法找到当前用户消息或消息类型错误。");
@@ -356,7 +360,7 @@ async function runAgentInConversationHandler(
   });
   if (
     !assistantMessageRow ||
-    assistantMessageRow.conversationId !== args.conversationId ||
+    !sameConversationId(assistantMessageRow.conversationId, args.conversationId) ||
     assistantMessageRow.role !== "assistant"
   ) {
     throw new Error("无法找到用于回应的助手消息。");
@@ -406,6 +410,7 @@ async function runAgentInConversationHandler(
       hasExistingPlan: Boolean(tripPlan),
     });
   input.runMode = resolvedMode;
+  input = await enrichInputWithSkills(ctx, input, userId);
   input = await optimizeInputContext({
     ctx,
     input,
@@ -624,10 +629,9 @@ export const runAgent = action({
       },
     };
 
-    const input = await optimizeInputContext({
-      ctx,
-      input: buildAgentInput(args, identity.subject),
-    });
+    let input = buildAgentInput(args, identity.subject);
+    input = await enrichInputWithSkills(ctx, input, identity.subject);
+    input = await optimizeInputContext({ ctx, input });
     await executeAgentPipeline(ctx, input, args.goalRaw, identity.subject, traceSink);
 
     return { sessionId: args.sessionId };
@@ -708,10 +712,9 @@ export const runAgentEval = action({
     };
 
     const evalUserId = "eval-platform";
-    const input = await optimizeInputContext({
-      ctx,
-      input: buildAgentInput(args, evalUserId),
-    });
+    let input = buildAgentInput(args, evalUserId);
+    input = await enrichInputWithSkills(ctx, input, evalUserId);
+    input = await optimizeInputContext({ ctx, input });
     const t0 = Date.now();
     await executeAgentPipeline(ctx, input, args.goalRaw, evalUserId, traceSink);
     const latencyMs = Date.now() - t0;

@@ -21,9 +21,8 @@ export class ToolRegistry implements IToolRegistry {
     return this.list().filter((t) => !disabled.has(t.name));
   }
 
-  /** 按显式工具名子集过滤；undefined 表示不过滤，[] 表示全部禁用 */
-  filterByNames(names?: ToolName[]): ToolRegistry {
-    if (names === undefined) return this;
+  /** 按显式工具名白名单过滤；[] 表示全部禁用（仅用于用户全局设置全关等场景） */
+  filterByNames(names: ToolName[]): ToolRegistry {
     if (names.length === 0) return ToolRegistry.fromDefinitions([]);
     const allowed = new Set(names);
     const filtered = this.list().filter((t) => allowed.has(t.name));

@@ -47,11 +47,8 @@ export function createAutonomousAgentPipeline(
   traceSink?: ITraceSink,
   deps?: AutonomousAgentPipelineDeps
 ): IAutonomousAgent {
-  void deps?.skillRegistry;
-  void deps?.knowledgeService;
-  void deps?.contextEngine;
-  void deps?.runModeRouter;
-
+  // skillRegistry / knowledgeService / contextEngine / runModeRouter 在 convex/agent.ts action 层注入；
+  // 此处仅组装 orchestrator 与可配置 toolRegistry（成员6）。
   const registry = deps?.toolRegistry ?? createStubToolRegistry();
   const llmClient = new OpenAICompatibleClient();
   const planGenerator = new LLMPlanGenerator(llmClient);

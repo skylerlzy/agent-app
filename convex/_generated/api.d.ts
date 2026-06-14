@@ -10,6 +10,7 @@
 
 import type * as agent from "../agent.js";
 import type * as authHelpers from "../authHelpers.js";
+import type * as conversationIds from "../conversationIds.js";
 import type * as conversations from "../conversations.js";
 import type * as knowledge from "../knowledge.js";
 import type * as memories from "../memories.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
   authHelpers: typeof authHelpers;
+  conversationIds: typeof conversationIds;
   conversations: typeof conversations;
   knowledge: typeof knowledge;
   memories: typeof memories;

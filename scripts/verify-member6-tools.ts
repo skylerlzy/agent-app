@@ -2,6 +2,7 @@
  * 成员6 工具链本地冒烟检查（无需 Convex / API Key）
  * 运行：npx tsx scripts/verify-member6-tools.ts
  */
+import { decideRunMode } from "../lib/agent/orchestrator/RunModeRouter";
 import { validateToolArguments } from "../lib/agent/tools/ToolArgumentValidator";
 import {
   createConfigurableToolRegistry,
@@ -41,6 +42,22 @@ const railOk = validateToolArguments("rail_schedule_hint", {
 });
 assert(railOk.ok, "rail_schedule_hint 合法参数通过");
 
+assert(
+  decideRunMode({ goalText: "从南京去珠海玩", history: [], hasExistingPlan: false }) ===
+    "full_plan_execute",
+  "新对话「从南京去珠海玩」须走 full_plan_execute"
+);
+assert(
+  decideRunMode({ goalText: "南京天气怎么样", history: [], hasExistingPlan: false }) ===
+    "quick_reply",
+  "新对话天气问答仍走 quick_reply"
+);
+assert(
+  decideRunMode({ goalText: "复述一下 Day2", history: [], hasExistingPlan: true }) ===
+    "quick_reply",
+  "已有方案复述走 quick_reply"
+);
+
 const full = createFullToolRegistry();
 assert(full.list().length === 4, "注册表含 4 个工具");
 
@@ -57,6 +74,9 @@ assert(
   poiOnly.list().length === 1 && poiOnly.list()[0]?.name === "poi_search",
   "对话级 enabledToolNames 仅暴露 poi_search"
 );
+
+const emptyMeansAll = createConfigurableToolRegistry({ enabledToolNames: [] });
+assert(emptyMeansAll.list().length === 4, "对话级空 enabledToolNames 不传白名单时默认全开");
 
 console.log(failed === 0 ? "\n全部通过" : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);

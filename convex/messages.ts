@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUserId } from "./authHelpers";
+import { conversationIdKey } from "./conversationIds";
 import {
   activeSkillIdsValidator,
   runModeValidator,
@@ -17,7 +18,9 @@ export const listRowsForConversationInternal = internalQuery({
   async handler(ctx, { conversationId }) {
     const rows = await ctx.db
       .query("messages")
-      .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", conversationIdKey(conversationId))
+      )
       .collect();
     return sortByCreatedAt(rows);
   },
@@ -46,7 +49,9 @@ export const listByConversation = query({
     const rows = sortByCreatedAt(
       await ctx.db
         .query("messages")
-        .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+        .withIndex("by_conversation", (q) =>
+          q.eq("conversationId", conversationIdKey(conversationId))
+        )
         .collect()
     );
 
@@ -105,14 +110,14 @@ export const sendUserMessage = mutation({
     const sessionId = crypto.randomUUID();
 
     const userMessageId = await ctx.db.insert("messages", {
-      conversationId: args.conversationId,
+      conversationId: conversationIdKey(args.conversationId),
       role: "user",
       content: text,
       createdAt: now,
     });
 
     const assistantMessageId = await ctx.db.insert("messages", {
-      conversationId: args.conversationId,
+      conversationId: conversationIdKey(args.conversationId),
       role: "assistant",
       content: "",
       runSessionId: sessionId,
