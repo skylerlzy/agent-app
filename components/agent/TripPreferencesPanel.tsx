@@ -2,33 +2,47 @@
 
 import type { ConversationPreferences } from "@/lib/conversationStorage";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   ACCOMMODATION_OPTIONS,
   DIETARY_PRESET_OPTIONS,
+  getPreferenceChipPalette,
+  PREFERENCE_SECTION_ACCENTS,
   TRANSPORT_OPTIONS,
   TRAVEL_PARTY_OPTIONS,
   TRAVEL_PACE_OPTIONS,
   TRAVEL_THEME_OPTIONS,
 } from "@/lib/tripPreferenceOptions";
-import { CalendarRange, ChevronDown, ChevronUp } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+
+type SectionKey = keyof typeof PREFERENCE_SECTION_ACCENTS;
 
 function ChipRow({
   label,
   hint,
+  section,
   children,
 }: {
   label: string;
   hint?: string;
+  section: SectionKey;
   children: ReactNode;
 }) {
+  const accent = PREFERENCE_SECTION_ACCENTS[section];
   return (
-    <div className="space-y-2">
-      <div>
-        <p className="text-xs font-semibold text-foreground">{label}</p>
-        {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+    <div className="space-y-2.5">
+      <div
+        className={cn(
+          "inline-flex items-center gap-2 rounded-xl bg-gradient-to-r px-2.5 py-1",
+          accent
+        )}
+      >
+        <p className="text-xs font-bold tracking-wide">{label}</p>
+        {hint ? (
+          <span className="rounded-full bg-background/50 px-1.5 py-0.5 text-[10px] font-medium opacity-80">
+            {hint}
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
@@ -36,43 +50,72 @@ function ChipRow({
 }
 
 function Chip({
+  optionId,
   active,
   disabled,
   onClick,
   children,
+  index = 0,
 }: {
+  optionId: string;
   active: boolean;
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
+  index?: number;
 }) {
+  const palette = getPreferenceChipPalette(optionId);
+
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
+      style={{ animationDelay: `${index * 35}ms` }}
       className={cn(
-        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-        active
-          ? "border-primary/50 bg-primary/15 text-primary shadow-sm"
-          : "border-border/80 bg-background/80 text-muted-foreground hover:border-primary/30 hover:bg-muted/40",
+        "group relative inline-flex items-center gap-1.5 overflow-hidden rounded-full border px-3 py-1.5 text-xs font-semibold",
+        "transition-all duration-200 ease-out motion-safe:animate-fade-in",
+        "hover:scale-[1.05] hover:-translate-y-0.5 active:scale-[0.96]",
+        active ? palette.active : palette.idle,
+        active && "motion-safe:animate-chip-pop ring-2 ring-white/40",
         disabled && "pointer-events-none opacity-50"
       )}
     >
-      {children}
+      {active ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent bg-[length:200%_100%] motion-safe:animate-chip-shine"
+        />
+      ) : null}
+      <span
+        className={cn(
+          "relative text-sm leading-none transition-transform duration-200",
+          "group-hover:scale-110",
+          active && "motion-safe:animate-chip-emoji-wiggle"
+        )}
+      >
+        {palette.emoji}
+      </span>
+      <span className="relative">{children}</span>
+      {active ? (
+        <span
+          aria-hidden
+          className="relative ml-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-black/15 bg-white/80 text-xs font-black leading-none text-emerald-950 shadow-sm"
+        >
+          ✓
+        </span>
+      ) : null}
     </button>
   );
 }
 
-export interface TripPreferencesPanelProps {
+export interface TripPreferencesContentProps {
   preferences: ConversationPreferences;
   onChange: (prefs: ConversationPreferences) => void;
   disabled?: boolean;
 }
 
-export function TripPreferencesPanel({ preferences, onChange, disabled }: TripPreferencesPanelProps) {
-  const [open, setOpen] = useState(false);
-
+export function TripPreferencesContent({ preferences, onChange, disabled }: TripPreferencesContentProps) {
   const patch = (partial: Partial<ConversationPreferences>) => {
     onChange({ ...preferences, ...partial });
   };
@@ -90,174 +133,157 @@ export function TripPreferencesPanel({ preferences, onChange, disabled }: TripPr
     });
   };
 
+  const selectedCount =
+    preferences.travelThemes.length +
+    (preferences.pace ? 1 : 0) +
+    (preferences.accommodationType ? 1 : 0) +
+    (preferences.dietaryPreset ? 1 : 0) +
+    preferences.transportPreferences.length +
+    (preferences.travelParty ? 1 : 0);
+
   return (
-    <div className="shrink-0 rounded-xl border border-border/60 bg-muted/15">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted/30"
-      >
-        <span className="flex items-center gap-2">
-          <CalendarRange className="h-4 w-4 text-primary" strokeWidth={1.75} />
-          出行偏好（日期、主题、预算等）
-        </span>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+    <div className="max-h-[min(20rem,52vh)] space-y-4 overflow-y-auto pr-0.5">
+      <p className="rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-sky-500/8 to-violet-500/10 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+        <span className="mr-1">🎒</span>
+        点选你的旅行 vibe，Agent 会按偏好安排行程
+        {selectedCount > 0 ? (
+          <span className="ml-1.5 font-semibold text-emerald-700">· 已选 {selectedCount} 项</span>
+        ) : null}
+      </p>
 
-      {open ? (
-        <div className="max-h-[min(20rem,40vh)] space-y-4 overflow-y-auto border-t border-border/50 px-3 py-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">开始日期</label>
-              <Input
-                type="date"
-                value={preferences.tripStart}
-                onChange={(e) => patch({ tripStart: e.target.value })}
-                disabled={disabled}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">结束日期</label>
-              <Input
-                type="date"
-                value={preferences.tripEnd}
-                onChange={(e) => patch({ tripEnd: e.target.value })}
-                disabled={disabled}
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
+      <ChipRow label="旅行主题" hint="可多选" section="theme">
+        {TRAVEL_THEME_OPTIONS.map((t, i) => (
+          <Chip
+            key={t.id}
+            optionId={t.id}
+            index={i}
+            active={preferences.travelThemes.includes(t.id)}
+            disabled={disabled}
+            onClick={() => toggleInList(t.id, preferences.travelThemes)}
+          >
+            {t.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="旅行主题" hint="可多选">
-            {TRAVEL_THEME_OPTIONS.map((t) => (
-              <Chip
-                key={t.id}
-                active={preferences.travelThemes.includes(t.id)}
-                disabled={disabled}
-                onClick={() => toggleInList(t.id, preferences.travelThemes)}
-              >
-                {t.label}
-              </Chip>
-            ))}
-          </ChipRow>
+      <ChipRow label="旅行节奏" section="pace">
+        {TRAVEL_PACE_OPTIONS.map((p, i) => (
+          <Chip
+            key={p.id}
+            optionId={p.id}
+            index={i}
+            active={preferences.pace === p.id}
+            disabled={disabled}
+            onClick={() => patch({ pace: preferences.pace === p.id ? "" : p.id })}
+          >
+            {p.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="旅行节奏">
-            {TRAVEL_PACE_OPTIONS.map((p) => (
-              <Chip
-                key={p.id}
-                active={preferences.pace === p.id}
-                disabled={disabled}
-                onClick={() => patch({ pace: preferences.pace === p.id ? "" : p.id })}
-              >
-                {p.label}
-              </Chip>
-            ))}
-          </ChipRow>
+      <ChipRow label="住宿类型" section="accommodation">
+        {ACCOMMODATION_OPTIONS.map((a, i) => (
+          <Chip
+            key={a.id}
+            optionId={a.id}
+            index={i}
+            active={preferences.accommodationType === a.id}
+            disabled={disabled}
+            onClick={() =>
+              patch({
+                accommodationType:
+                  preferences.accommodationType === a.id ? "" : (a.id as ConversationPreferences["accommodationType"]),
+              })
+            }
+          >
+            {a.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="住宿类型">
-            {ACCOMMODATION_OPTIONS.map((a) => (
-              <Chip
-                key={a.id}
-                active={preferences.accommodationType === a.id}
-                disabled={disabled}
-                onClick={() =>
-                  patch({
-                    accommodationType:
-                      preferences.accommodationType === a.id ? "" : (a.id as ConversationPreferences["accommodationType"]),
-                  })
-                }
-              >
-                {a.label}
-              </Chip>
-            ))}
-          </ChipRow>
+      <ChipRow label="饮食习惯" section="dietary">
+        {DIETARY_PRESET_OPTIONS.map((d, i) => (
+          <Chip
+            key={d.id}
+            optionId={d.id}
+            index={i}
+            active={preferences.dietaryPreset === d.id}
+            disabled={disabled}
+            onClick={() =>
+              patch({
+                dietaryPreset:
+                  preferences.dietaryPreset === d.id ? "" : (d.id as ConversationPreferences["dietaryPreset"]),
+              })
+            }
+          >
+            {d.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="饮食习惯">
-            {DIETARY_PRESET_OPTIONS.map((d) => (
-              <Chip
-                key={d.id}
-                active={preferences.dietaryPreset === d.id}
-                disabled={disabled}
-                onClick={() =>
-                  patch({
-                    dietaryPreset:
-                      preferences.dietaryPreset === d.id ? "" : (d.id as ConversationPreferences["dietaryPreset"]),
-                  })
-                }
-              >
-                {d.label}
-              </Chip>
-            ))}
-          </ChipRow>
+      <ChipRow label="交通偏好" hint="可多选" section="transport">
+        {TRANSPORT_OPTIONS.map((t, i) => (
+          <Chip
+            key={t.id}
+            optionId={t.id}
+            index={i}
+            active={preferences.transportPreferences.includes(t.id)}
+            disabled={disabled}
+            onClick={() => toggleTransport(t.id)}
+          >
+            {t.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="交通偏好" hint="可多选">
-            {TRANSPORT_OPTIONS.map((t) => (
-              <Chip
-                key={t.id}
-                active={preferences.transportPreferences.includes(t.id)}
-                disabled={disabled}
-                onClick={() => toggleTransport(t.id)}
-              >
-                {t.label}
-              </Chip>
-            ))}
-          </ChipRow>
+      <ChipRow label="同行规模" section="party">
+        {TRAVEL_PARTY_OPTIONS.map((p, i) => (
+          <Chip
+            key={p.id}
+            optionId={p.id}
+            index={i}
+            active={preferences.travelParty === p.id}
+            disabled={disabled}
+            onClick={() =>
+              patch({
+                travelParty: preferences.travelParty === p.id ? "" : (p.id as ConversationPreferences["travelParty"]),
+              })
+            }
+          >
+            {p.label}
+          </Chip>
+        ))}
+      </ChipRow>
 
-          <ChipRow label="同行规模">
-            {TRAVEL_PARTY_OPTIONS.map((p) => (
-              <Chip
-                key={p.id}
-                active={preferences.travelParty === p.id}
-                disabled={disabled}
-                onClick={() =>
-                  patch({
-                    travelParty: preferences.travelParty === p.id ? "" : (p.id as ConversationPreferences["travelParty"]),
-                  })
-                }
-              >
-                {p.label}
-              </Chip>
-            ))}
-          </ChipRow>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">人均预算（元）</label>
-              <Input
-                type="number"
-                min={0}
-                value={preferences.budgetCny}
-                onChange={(e) => patch({ budgetCny: e.target.value })}
-                placeholder="如 3000"
-                disabled={disabled}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">饮食补充</label>
-              <Input
-                value={preferences.dietaryNotes}
-                onChange={(e) => patch({ dietaryNotes: e.target.value })}
-                placeholder="过敏、忌口等"
-                disabled={disabled}
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">备注与特别要求</label>
-            <Textarea
-              value={preferences.additionalNotes}
-              onChange={(e) => patch({ additionalNotes: e.target.value })}
-              placeholder="带老人小孩、必去某博物馆等"
-              className="min-h-[72px] resize-y text-xs"
-              disabled={disabled}
-            />
-          </div>
+      <div className="space-y-2">
+        <div
+          className={cn(
+            "inline-flex items-center gap-2 rounded-xl bg-gradient-to-r px-2.5 py-1",
+            PREFERENCE_SECTION_ACCENTS.budget
+          )}
+        >
+          <span className="text-sm">💰</span>
+          <label className="text-xs font-bold tracking-wide">人均预算（元）</label>
         </div>
-      ) : null}
+        <Input
+          type="number"
+          min={0}
+          value={preferences.budgetCny}
+          onChange={(e) => patch({ budgetCny: e.target.value })}
+          placeholder="如 3000 — 随便花也行 😎"
+          disabled={disabled}
+          className={cn(
+            "h-10 rounded-2xl border-amber-500/30 bg-gradient-to-r from-amber-500/[0.06] via-yellow-500/[0.04] to-orange-500/[0.06] text-xs",
+            "transition-all duration-200 hover:border-amber-500/45 focus-visible:ring-amber-500/30",
+            preferences.budgetCny.trim() && "border-amber-500/50 shadow-sm shadow-amber-500/15"
+          )}
+        />
+      </div>
     </div>
   );
+}
+
+/** @deprecated 使用 ChatComposerActions 中的出行偏好悬浮框 */
+export function TripPreferencesPanel(props: TripPreferencesContentProps) {
+  return <TripPreferencesContent {...props} />;
 }

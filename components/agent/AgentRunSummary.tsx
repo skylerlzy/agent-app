@@ -2,6 +2,7 @@
 
 import type { ReasoningEvent } from "@/lib/agent/contracts";
 import { tripPlanFromRunDone } from "@/lib/agent/context/tripPlanMemory";
+import { SECTION_GRADIENT_ACCENTS } from "@/lib/voyageTheme";
 import { MarkdownTravelBody } from "@/components/agent/MarkdownTravelBody";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -67,18 +68,20 @@ export function AgentRunSummary({ markdown, events = [], isUpdating, className }
   return (
     <GlassCard
       className={cn(
-        "cursor-default overflow-hidden border-primary/10 shadow-lg shadow-primary/[0.06] ring-1 ring-primary/10",
+        "cursor-default overflow-hidden border-voyage-sky/20 shadow-xl shadow-voyage-sky/10 ring-1 ring-voyage-teal/15",
         className
       )}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-primary/[0.08] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-br from-primary/10 via-voyage-sky/8 to-voyage-amber/6" />
       <CardHeader className="relative space-y-2 pb-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/12 text-primary shadow-inner">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-gradient-to-br from-primary/20 to-voyage-teal/15 text-primary shadow-inner shadow-primary/15">
             <MapPinned className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div>
-            <CardTitle className="text-xl font-bold tracking-tight text-foreground">全程出行方案</CardTitle>
+            <CardTitle className="bg-voyage-brand bg-clip-text text-xl font-bold tracking-tight text-transparent">
+              全程出行方案
+            </CardTitle>
             <CardDescription className="text-[13px] leading-snug text-muted-foreground">
               {isUpdating
                 ? "正在根据您的最新要求更新行程…"
@@ -91,25 +94,34 @@ export function AgentRunSummary({ markdown, events = [], isUpdating, className }
         {summary ? (
           sections.length > 0 ? (
             <div className="flex flex-col gap-5">
-              {sections.map((sec, i) => (
+              {sections.map((sec, i) => {
+                const accent = SECTION_GRADIENT_ACCENTS[i % SECTION_GRADIENT_ACCENTS.length];
+                return (
                 <article
                   key={`${sec.title}-${i}`}
                   className={cn(
-                    "group rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card to-muted/15 p-5 shadow-md transition-shadow",
-                    "hover:border-primary/25 hover:shadow-lg hover:shadow-primary/[0.04]"
+                    "group relative overflow-hidden rounded-2xl border border-border/55 bg-gradient-to-br from-card via-card to-muted/12 p-5 shadow-md transition-all duration-300",
+                    accent.card
                   )}
                 >
-                  <h3 className="mb-3 flex items-center gap-2 border-b border-border/50 pb-2 text-sm font-bold tracking-wide text-primary">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-80",
+                      accent.stripe
+                    )}
+                  />
+                  <h3 className={cn("mb-3 flex items-center gap-2 border-b border-border/50 pb-2 text-sm font-bold tracking-wide", accent.title)}>
+                    <span className={cn("inline-block h-2 w-2 rounded-full shadow-sm", accent.dot)} />
                     {sec.title}
                   </h3>
                   <MarkdownTravelBody markdown={sec.body || "_（本节无正文）_"} />
                 </article>
-              ))}
+              );
+              })}
             </div>
           ) : (
-            <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-card to-muted/20 p-6 shadow-inner">
-              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary/80">总结</p>
+            <div className="rounded-2xl border border-voyage-sky/25 bg-gradient-to-br from-primary/[0.07] via-voyage-sky/[0.05] to-voyage-amber/[0.04] p-6 shadow-inner">
+              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-voyage-teal">总结</p>
               <MarkdownTravelBody markdown={summary} />
             </div>
           )

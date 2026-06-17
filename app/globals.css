@@ -4,28 +4,30 @@
 
 @layer base {
   :root {
-    /* 淡青主调：清透、有生机；辅以 sky / amber 点缀 */
-    --background: 168 32% 96%;
-    --foreground: 196 28% 22%;
-    --card: 165 28% 99%;
-    --card-foreground: 196 26% 20%;
-    --primary: 168 32% 36%;
+    /* 绿色主品牌 + sky / amber / violet 活力点缀 */
+    --background: 168 34% 95%;
+    --foreground: 196 28% 20%;
+    --card: 165 30% 99%;
+    --card-foreground: 196 26% 18%;
+    --primary: 162 38% 34%;
     --primary-foreground: 165 20% 98%;
-    --secondary: 172 24% 92%;
-    --secondary-foreground: 196 22% 28%;
-    --muted: 165 18% 92%;
-    --muted-foreground: 196 14% 40%;
-    --accent: 199 32% 90%;
-    --accent-foreground: 196 26% 24%;
-    --border: 165 16% 86%;
-    --input: 165 14% 90%;
-    --ring: 168 32% 42%;
+    --secondary: 172 26% 91%;
+    --secondary-foreground: 196 22% 26%;
+    --muted: 165 20% 91%;
+    --muted-foreground: 196 14% 38%;
+    --accent: 199 40% 88%;
+    --accent-foreground: 196 26% 22%;
+    --border: 165 18% 84%;
+    --input: 165 16% 89%;
+    --ring: 162 38% 40%;
     --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
     --radius: 0.875rem;
-    --voyage-sky: 199 76% 48%;
-    --voyage-amber: 38 92% 50%;
-    --voyage-teal: 172 45% 38%;
+    --voyage-sky: 199 82% 46%;
+    --voyage-amber: 38 94% 52%;
+    --voyage-teal: 172 48% 36%;
+    --voyage-violet: 262 58% 54%;
+    --voyage-coral: 12 78% 58%;
   }
 
   * {
@@ -34,5 +36,28 @@
 
   body {
     @apply min-h-dvh bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  .voyage-header-glow {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.12),
+      hsl(var(--voyage-sky) / 0.1),
+      hsl(var(--voyage-amber) / 0.08),
+      hsl(var(--voyage-violet) / 0.08),
+      hsl(var(--primary) / 0.12)
+    );
+  }
+
+  .voyage-surface-wash {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--primary) / 0.06) 0%,
+      hsl(var(--voyage-sky) / 0.05) 35%,
+      hsl(var(--voyage-amber) / 0.04) 70%,
+      hsl(var(--voyage-violet) / 0.04) 100%
+    );
   }
 }

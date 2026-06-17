@@ -19,6 +19,8 @@ export const runPreferencesValidator = v.optional(
     travelParty: v.optional(
       v.union(v.literal("solo"), v.literal("couple"), v.literal("family"), v.literal("group"))
     ),
+    destination: v.optional(v.string()),
+    originCity: v.optional(v.string()),
   })
 );
 

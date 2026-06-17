@@ -31,10 +31,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN" suppressHydrationWarning className={`${fontSans.variable} ${fontDisplay.variable}`}>
       <body className="font-sans">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_0%_0%,hsl(168_42%_92%/0.85),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_100%_10%,hsl(175_35%_90%/0.55),transparent_50%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_85%_20%,hsl(199_70%_88%/0.35),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_15%_85%,hsl(38_80%_88%/0.22),transparent_50%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_100%_80%_at_0%_0%,hsl(168_48%_90%/0.9),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_100%_10%,hsl(175_40%_88%/0.6),transparent_50%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_85%_20%,hsl(199_75%_86%/0.45),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_15%_85%,hsl(38_85%_86%/0.3),transparent_50%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_45%_35%_at_92%_88%,hsl(262_55%_88%/0.28),transparent_50%)]" />
           <div
             className="absolute inset-0 opacity-[0.06]"
             style={{
@@ -43,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             aria-hidden
           />
           <div
-            className="absolute inset-0 animate-gradient-flow bg-gradient-to-br from-[hsl(168_35%_96%)] via-[hsl(172_28%_95%)] to-[hsl(165_32%_94%)] bg-[length:200%_200%] opacity-95"
+            className="absolute inset-0 animate-gradient-flow bg-gradient-to-br from-[hsl(168_38%_95%)] via-[hsl(172_32%_94%)] to-[hsl(199_30%_93%)] bg-[length:200%_200%] opacity-95"
             aria-hidden
           />
         </div>

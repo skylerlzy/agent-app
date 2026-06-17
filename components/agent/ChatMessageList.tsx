@@ -9,16 +9,16 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Bot, ChevronDown, ChevronUp, User } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface ChatMessageListProps {
   messages: StoredChatMessage[];
-  /** 当前正在订阅 trace 的 sessionId */
   activeSessionId?: string | null;
-  /** 当前正在订阅的 session 的实时事件（运行中） */
   liveEvents?: ReasoningEvent[];
   isRunning?: boolean;
   className?: string;
+  /** 无消息时居中展示（如出行信息确认） */
+  emptyContent?: ReactNode;
 }
 
 function AssistantBubble({
@@ -49,11 +49,11 @@ function AssistantBubble({
 
   return (
     <div className="flex gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-voyage-violet/30 bg-gradient-to-br from-voyage-violet/15 to-voyage-sky/10 text-voyage-violet shadow-sm">
         <Bot className="h-4 w-4" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="rounded-2xl rounded-tl-md border border-border/60 bg-card/90 px-4 py-3 shadow-sm">
+        <div className="rounded-2xl rounded-tl-md border border-voyage-sky/25 bg-gradient-to-br from-card/95 via-card/90 to-voyage-sky/[0.06] px-4 py-3 shadow-sm">
           {showRunning ? (
             <div className="space-y-3">
               <ReasoningPipeline
@@ -65,9 +65,9 @@ function AssistantBubble({
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">Agent 正在规划与调用工具…</p>
                   <div className="flex gap-1">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary/60" />
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary/40 [animation-delay:150ms]" />
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary/25 [animation-delay:300ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary/70" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-voyage-sky/70 [animation-delay:150ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-voyage-amber/70 [animation-delay:300ms]" />
                   </div>
                 </div>
               ) : null}
@@ -112,10 +112,10 @@ function AssistantBubble({
 function UserBubble({ content }: { content: string }) {
   return (
     <div className="flex flex-row-reverse gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/50 text-muted-foreground">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-gradient-to-br from-primary/18 to-voyage-teal/12 text-primary shadow-sm">
         <User className="h-4 w-4" strokeWidth={1.75} />
       </div>
-      <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-primary/20 bg-primary/10 px-4 py-3 text-sm leading-relaxed text-foreground shadow-sm">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-primary/25 bg-gradient-to-br from-primary/14 via-emerald-500/10 to-voyage-sky/10 px-4 py-3 text-sm leading-relaxed text-foreground shadow-sm shadow-primary/10">
         {content}
       </div>
     </div>
@@ -128,6 +128,7 @@ export function ChatMessageList({
   liveEvents,
   isRunning,
   className,
+  emptyContent,
 }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -139,19 +140,11 @@ export function ChatMessageList({
     return (
       <div
         className={cn(
-          "flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center",
+          "flex flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6",
           className
         )}
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
-          <Bot className="h-6 w-6 text-primary" strokeWidth={1.5} />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-foreground">开始规划你的出行</p>
-          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-            在下方输入目的地与需求，Agent 将调用天气与路线工具，并生成可执行的行程建议。
-          </p>
-        </div>
+        {emptyContent}
       </div>
     );
   }

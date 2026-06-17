@@ -54,6 +54,10 @@ export interface TripPreferences {
   additionalNotes?: string;
   /** 同行规模，影响路线与强度描述 */
   travelParty?: "solo" | "couple" | "family" | "group";
+  /** 对话开始前确认的目的地 */
+  destination?: string;
+  /** 出发城市 */
+  originCity?: string;
 }
 
 // ---------------------------------------------------------------------------

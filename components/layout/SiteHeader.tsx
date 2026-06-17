@@ -24,17 +24,19 @@ export function SiteHeader({ className }: SiteHeaderProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl transition-shadow duration-300 ease-soft",
+        "sticky top-0 z-50 border-b border-border/50 bg-background/85 backdrop-blur-xl transition-shadow duration-300 ease-soft",
+        "shadow-sm shadow-primary/5",
         className
       )}
     >
+      <div className="voyage-header-glow h-0.5 w-full" aria-hidden />
       <div className="mx-auto flex min-h-14 max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 sm:py-2 lg:px-8">
         <Link
           href="/"
           className="group flex min-w-0 max-w-full flex-1 items-center gap-2.5 text-foreground transition-opacity hover:opacity-90 sm:max-w-[min(100%,36rem)] lg:max-w-none"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary transition-transform duration-300 ease-soft group-hover:scale-[1.02]">
-            <Plane className="h-4 w-4" strokeWidth={1.75} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-gradient-to-br from-primary/20 via-voyage-teal/15 to-voyage-sky/15 text-primary shadow-sm shadow-primary/15 transition-transform duration-300 ease-soft group-hover:scale-[1.04]">
+            <Plane className="h-4 w-4 motion-safe:animate-plane-sway motion-reduce:animate-none" strokeWidth={1.75} />
           </span>
           <span className="min-w-0 text-pretty text-sm font-medium leading-snug tracking-tight text-foreground sm:text-[0.9375rem]">
             VoyageMind——您的私人出行助手
@@ -51,8 +53,8 @@ export function SiteHeader({ className }: SiteHeaderProps) {
                 className={cn(
                   "hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors sm:inline-flex",
                   pathname.startsWith("/settings")
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border/70 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                    ? "border-voyage-violet/35 bg-gradient-to-r from-voyage-violet/12 to-voyage-sky/10 text-voyage-violet shadow-sm"
+                    : "border-border/70 text-muted-foreground hover:border-voyage-sky/35 hover:bg-voyage-sky/8 hover:text-foreground"
                 )}
               >
                 <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />

@@ -9,6 +9,8 @@ export function mergeGoalFromPreferences(
   const baseSlots = existingSlots ?? {};
   const mergedSlots = {
     ...baseSlots,
+    destination: preferences.destination ?? baseSlots.destination,
+    originCity: preferences.originCity ?? baseSlots.originCity,
     startDateIso: preferences.tripStartDateIso ?? baseSlots.startDateIso,
     endDateIso: preferences.tripEndDateIso ?? baseSlots.endDateIso,
     pace: preferences.pace ?? baseSlots.pace,

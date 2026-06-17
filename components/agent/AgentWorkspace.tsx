@@ -8,9 +8,9 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { AgentRunSummary } from "@/components/agent/AgentRunSummary";
 import { ChatMessageList } from "@/components/agent/ChatMessageList";
 import { ConversationList } from "@/components/agent/ConversationList";
-import { TripPreferencesPanel } from "@/components/agent/TripPreferencesPanel";
-import { SkillPicker } from "@/components/agent/SkillPicker";
-import { ToolPicker } from "@/components/agent/ToolPicker";
+import { ChatComposerActions } from "@/components/agent/ChatComposerActions";
+import { TripSetupPanel, formatTripDateRange, formatTripRoute, isTripSetupComplete, tripCoreFieldsChanged } from "@/components/agent/TripSetupPanel";
+import { TripInfoEditModal } from "@/components/agent/TripInfoEditModal";
 import type { ToolName } from "@/lib/agent/contracts";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,9 +27,10 @@ import {
   type StoredChatMessage,
 } from "@/lib/conversationStorage";
 import { extractTripPlanFromHistory } from "@/lib/agent/context/tripPlanMemory";
+import { CHAT_PANEL_STYLES } from "@/lib/voyageTheme";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 import { cn } from "@/lib/utils";
-import { Brain, Send, Rocket } from "lucide-react";
+import { CalendarRange, MapPin, Send, Rocket } from "lucide-react";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const EMPTY_SKILL_IDS: string[] = [];
@@ -40,12 +41,17 @@ function parseLocalNoon(iso: string): number {
 }
 
 function validatePreferences(prefs: ConversationPreferences): string | null {
+  const origin = prefs.origin.trim();
+  const dest = prefs.destination.trim();
+  if (!origin) return "请先确认出发地。";
+  if (!dest) return "请先确认目的地。";
   const { tripStart, tripEnd } = prefs;
   const ts = tripStart.trim();
   const te = tripEnd.trim();
-  if (ts && !ISO_DAY.test(ts)) return "旅行开始日期格式须为 YYYY-MM-DD。";
-  if (te && !ISO_DAY.test(te)) return "旅行结束日期格式须为 YYYY-MM-DD。";
-  if (ts && te && parseLocalNoon(ts) > parseLocalNoon(te)) {
+  if (!ts || !te) return "请先确认旅行开始与结束日期。";
+  if (!ISO_DAY.test(ts)) return "旅行开始日期格式须为 YYYY-MM-DD。";
+  if (!ISO_DAY.test(te)) return "旅行结束日期格式须为 YYYY-MM-DD。";
+  if (parseLocalNoon(ts) > parseLocalNoon(te)) {
     return "旅行结束日期须不早于开始日期。";
   }
   return null;
@@ -83,49 +89,6 @@ function mapToStoredMessage(row: MessageRow, activeSessionId: string | null): St
   };
 }
 
-function SharedKnowledgeToggle({
-  enabled,
-  disabled,
-  onChange,
-}: {
-  enabled: boolean;
-  disabled?: boolean;
-  onChange: (enabled: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
-      <div className="min-w-0">
-        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Brain className="h-4 w-4 text-primary" strokeWidth={1.75} />
-          共享长期记忆
-        </p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {enabled ? "本对话会读取其他对话沉淀的偏好与约束" : "仅使用本对话抽取的记忆"}
-        </p>
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        aria-pressed={enabled}
-        aria-label={enabled ? "关闭共享长期记忆" : "开启共享长期记忆"}
-        onClick={() => onChange(!enabled)}
-        className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
-          enabled ? "border-primary/50 bg-primary/80" : "border-border bg-muted/60",
-          disabled && "pointer-events-none opacity-50"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
-            enabled ? "left-[1.35rem]" : "left-0.5"
-          )}
-        />
-      </button>
-    </div>
-  );
-}
-
 export function AgentWorkspace() {
   const [activeId, setActiveId] = useState<Id<"conversations"> | null>(null);
   const [draft, setDraft] = useState("");
@@ -139,6 +102,17 @@ export function AgentWorkspace() {
   const [draftPreferences, setDraftPreferences] = useState<ConversationPreferences>(() =>
     defaultPreferences()
   );
+  const [tripSetupConfirmed, setTripSetupConfirmed] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [tripEditOpen, setTripEditOpen] = useState(false);
+  const [tripEditDraft, setTripEditDraft] = useState<ConversationPreferences>(() => defaultPreferences());
+  const [tripEditError, setTripEditError] = useState<string | null>(null);
+  const savedTripCoreRef = useRef<Pick<ConversationPreferences, "origin" | "destination" | "tripStart" | "tripEnd">>({
+    origin: "",
+    destination: "",
+    tripStart: "",
+    tripEnd: "",
+  });
 
   const conversations = useQuery(api.conversations.listByUser);
   const messageRows = useQuery(
@@ -158,12 +132,21 @@ export function AgentWorkspace() {
     [conversations, activeId]
   );
 
-  /** 切换对话时从服务端同步偏好（不触发写回 Convex） */
+  /** 切换对话时同步偏好与出行确认状态 */
   useEffect(() => {
     if (!activeId || conversations === undefined) return;
     const conv = conversations.find((c) => c._id === activeId);
     if (!conv) return;
-    setDraftPreferences(parsePreferencesJson(conv.preferencesJson));
+    const parsed = parsePreferencesJson(conv.preferencesJson);
+    setDraftPreferences(parsed);
+    savedTripCoreRef.current = {
+      origin: parsed.origin,
+      destination: parsed.destination,
+      tripStart: parsed.tripStart,
+      tripEnd: parsed.tripEnd,
+    };
+    setTripSetupConfirmed(conv.messageCount > 0 || isTripSetupComplete(parsed));
+    setSetupError(null);
   }, [activeId, conversations]);
 
   const activeSkillIds = useMemo(
@@ -180,6 +163,7 @@ export function AgentWorkspace() {
     if (!messageRows) return [];
     return (messageRows as MessageRow[]).map((row) => mapToStoredMessage(row, activeSessionId));
   }, [messageRows, activeSessionId]);
+
 
   const listItems = useMemo(
     () =>
@@ -272,6 +256,8 @@ export function AgentWorkspace() {
       setActiveId(id);
       setDraft("");
       setRunError(null);
+      setTripSetupConfirmed(false);
+      setSetupError(null);
     } catch (e) {
       setRunError(e instanceof Error ? e.message : String(e));
     }
@@ -387,10 +373,127 @@ export function AgentWorkspace() {
     setActiveId(id as Id<"conversations">);
   }, []);
 
+  const handleConfirmTripSetup = useCallback(() => {
+    const err = validatePreferences(draftPreferences);
+    if (err) {
+      setSetupError(err);
+      return;
+    }
+    setSetupError(null);
+    setTripSetupConfirmed(true);
+    savedTripCoreRef.current = {
+      origin: draftPreferences.origin,
+      destination: draftPreferences.destination,
+      tripStart: draftPreferences.tripStart,
+      tripEnd: draftPreferences.tripEnd,
+    };
+    void persistConversationMeta(draftPreferences, activeSkillIds, enabledToolNames, sharedKnowledgeEnabled, true);
+  }, [
+    draftPreferences,
+    activeSkillIds,
+    enabledToolNames,
+    sharedKnowledgeEnabled,
+    persistConversationMeta,
+  ]);
+
+  const canChat = tripSetupConfirmed && isTripSetupComplete(draftPreferences);
+
+  const hasExistingPlan = Boolean(masterTripPlan.trim() || uiMessages.length > 0);
+
+  const openTripEdit = useCallback(() => {
+    setTripEditDraft({ ...draftPreferences });
+    setTripEditError(null);
+    setTripEditOpen(true);
+  }, [draftPreferences]);
+
+  const triggerFullPlanRegenerate = useCallback(
+    async (prefs: ConversationPreferences) => {
+      if (!activeId) return;
+      const route = formatTripRoute(prefs.origin, prefs.destination);
+      const dates = formatTripDateRange(prefs.tripStart, prefs.tripEnd);
+      const text = `请根据更新后的出行信息（${route}，${dates}）重新生成完整旅行方案。`;
+
+      setLoading(true);
+      setRunError(null);
+      try {
+        const { sessionId } = await sendUserMessage({
+          conversationId: activeId,
+          content: text,
+          preferences: toTripPreferences(prefs),
+          activeSkillIds,
+          enabledToolNames: enabledToolNames.length > 0 ? enabledToolNames : undefined,
+          runMode: "full_plan_execute",
+        });
+        finishedSessionsRef.current.delete(sessionId);
+        setActiveSessionId(sessionId);
+      } catch (e) {
+        setRunError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      }
+    },
+    [activeId, activeSkillIds, enabledToolNames, sendUserMessage]
+  );
+
+  const handleSaveTripEdit = useCallback(async () => {
+    const err = validatePreferences(tripEditDraft);
+    if (err) {
+      setTripEditError(err);
+      return;
+    }
+
+    const coreChanged = tripCoreFieldsChanged(savedTripCoreRef.current, tripEditDraft);
+    const needsRegenerate = coreChanged && hasExistingPlan;
+
+    if (needsRegenerate) {
+      const ok = window.confirm(
+        "修改出发地、目的地或旅行日期将重新生成全部旅行方案，右侧现有行程会被覆盖。是否继续？"
+      );
+      if (!ok) return;
+    }
+
+    setTripEditError(null);
+    setDraftPreferences(tripEditDraft);
+    savedTripCoreRef.current = {
+      origin: tripEditDraft.origin,
+      destination: tripEditDraft.destination,
+      tripStart: tripEditDraft.tripStart,
+      tripEnd: tripEditDraft.tripEnd,
+    };
+    setTripEditOpen(false);
+
+    try {
+      await persistConversationMeta(
+        tripEditDraft,
+        activeSkillIds,
+        enabledToolNames,
+        sharedKnowledgeEnabled,
+        true
+      );
+      if (needsRegenerate) {
+        await triggerFullPlanRegenerate(tripEditDraft);
+      }
+    } catch (e) {
+      setRunError(e instanceof Error ? e.message : String(e));
+    }
+  }, [
+    tripEditDraft,
+    hasExistingPlan,
+    persistConversationMeta,
+    activeSkillIds,
+    enabledToolNames,
+    sharedKnowledgeEnabled,
+    triggerFullPlanRegenerate,
+  ]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !activeId) {
       setRunError("请输入出行目标。");
+      return;
+    }
+
+    if (!canChat) {
+      setRunError("请先确认出发地、目的地与旅行时间。");
       return;
     }
 
@@ -419,7 +522,7 @@ export function AgentWorkspace() {
       setRunError(msg);
       setLoading(false);
     }
-  }, [draft, activeId, draftPreferences, activeSkillIds, enabledToolNames, sendUserMessage]);
+  }, [draft, activeId, draftPreferences, activeSkillIds, enabledToolNames, sendUserMessage, canChat]);
 
   if (conversations === undefined) {
     return (
@@ -452,17 +555,57 @@ export function AgentWorkspace() {
           onDelete={(id) => void handleDelete(id)}
         />
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/60 shadow-sm ring-1 ring-primary/5">
-          <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
+        <section className={CHAT_PANEL_STYLES.shell}>
+          <div className={CHAT_PANEL_STYLES.topStripe} aria-hidden />
+          <header
+            className={cn(
+              CHAT_PANEL_STYLES.header,
+              "relative z-[2] flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            )}
+          >
             <div className="min-w-0">
               <h2 className="truncate text-sm font-semibold text-foreground">
                 {activeConversation?.title ?? "对话"}
               </h2>
               <p className="text-[11px] text-muted-foreground">多轮对话 · Plan-Execute · ReAct</p>
             </div>
-            <Button type="button" variant="outline" size="sm" className="h-8 text-xs lg:hidden" onClick={() => void handleNew()}>
-              新建
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {canChat && (draftPreferences.origin.trim() || draftPreferences.destination.trim()) ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={openTripEdit}
+                    className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-900 transition hover:border-violet-500/50 hover:bg-violet-500/15 disabled:opacity-50"
+                    title="点击修改出发地、目的地与日期"
+                  >
+                    <MapPin className="h-3 w-3" />
+                    {formatTripRoute(draftPreferences.origin, draftPreferences.destination)}
+                  </button>
+                  {formatTripDateRange(draftPreferences.tripStart, draftPreferences.tripEnd) ? (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={openTripEdit}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-900 transition hover:border-sky-500/50 hover:bg-sky-500/15 disabled:opacity-50"
+                      title="点击修改旅行日期"
+                    >
+                      <CalendarRange className="h-3 w-3" />
+                      {formatTripDateRange(draftPreferences.tripStart, draftPreferences.tripEnd)}
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs lg:hidden"
+                onClick={() => void handleNew()}
+              >
+                新建
+              </Button>
+            </div>
           </header>
 
           <ChatMessageList
@@ -470,24 +613,35 @@ export function AgentWorkspace() {
             activeSessionId={activeSessionId}
             liveEvents={liveEvents ?? undefined}
             isRunning={loading}
+            emptyContent={
+              !tripSetupConfirmed ? (
+                <TripSetupPanel
+                  preferences={draftPreferences}
+                  onChange={(prefs) => {
+                    setDraftPreferences(prefs);
+                    debouncedPersistPreferences(prefs);
+                  }}
+                  onConfirm={handleConfirmTripSetup}
+                  error={setupError}
+                  disabled={loading}
+                />
+              ) : null
+            }
           />
 
-          <div className="shrink-0 space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
+          <div className={cn(CHAT_PANEL_STYLES.footer, "z-10 space-y-3 p-3 sm:p-4")}>
             {activeConversation ? (
-              <>
-                <SharedKnowledgeToggle
-                  enabled={sharedKnowledgeEnabled}
-                  disabled={loading}
-                  onChange={handleSharedKnowledgeChange}
-                />
-                <SkillPicker selectedIds={activeSkillIds} onChange={handleSkillIdsChange} disabled={loading} />
-                <ToolPicker
-                  selectedNames={enabledToolNames}
-                  onChange={handleToolNamesChange}
-                  disabled={loading}
-                />
-                <TripPreferencesPanel preferences={draftPreferences} onChange={handlePreferencesChange} disabled={loading} />
-              </>
+              <ChatComposerActions
+                sharedKnowledgeEnabled={sharedKnowledgeEnabled}
+                onSharedKnowledgeChange={handleSharedKnowledgeChange}
+                activeSkillIds={activeSkillIds}
+                onSkillIdsChange={handleSkillIdsChange}
+                enabledToolNames={enabledToolNames}
+                onToolNamesChange={handleToolNamesChange}
+                preferences={draftPreferences}
+                onPreferencesChange={handlePreferencesChange}
+                disabled={loading}
+              />
             ) : null}
 
             {runError ? (
@@ -496,13 +650,17 @@ export function AgentWorkspace() {
               </p>
             ) : null}
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 rounded-2xl border border-voyage-sky/20 bg-background/85 p-2 shadow-inner shadow-voyage-sky/5">
               <Textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="例：规划南京 3 日游，预算 3000；追问：第二天改成慢节奏…"
-                className="min-h-[44px] max-h-32 flex-1 resize-none text-sm"
-                disabled={loading}
+                placeholder={
+                  canChat
+                    ? "例：帮我安排每日景点与交通；追问：第二天改成慢节奏…"
+                    : "请先确认上方出行信息后再开始对话"
+                }
+                className="min-h-[44px] max-h-32 flex-1 resize-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+                disabled={loading || !canChat}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -513,8 +671,8 @@ export function AgentWorkspace() {
               <Button
                 type="button"
                 onClick={() => void send()}
-                disabled={loading || !draft.trim() || !activeId}
-                className="h-auto shrink-0 gap-1.5 px-4"
+                disabled={loading || !draft.trim() || !activeId || !canChat}
+                className="h-auto shrink-0 gap-1.5 rounded-xl px-4 shadow-md shadow-primary/20"
               >
                 {loading ? (
                   "运行中…"
@@ -539,7 +697,7 @@ export function AgentWorkspace() {
                 className="sticky top-0"
               />
             ) : (
-              <GlassCard className="cursor-default border-dashed">
+              <GlassCard className="cursor-default border-dashed border-voyage-teal/30 bg-gradient-to-br from-card/85 via-voyage-teal/[0.06] to-voyage-sky/[0.05]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">全程出行方案</CardTitle>
                   <CardDescription className="text-xs">
@@ -566,6 +724,17 @@ export function AgentWorkspace() {
           />
         </div>
       ) : null}
+
+      <TripInfoEditModal
+        open={tripEditOpen}
+        preferences={tripEditDraft}
+        onChange={setTripEditDraft}
+        onSave={() => void handleSaveTripEdit()}
+        onClose={() => setTripEditOpen(false)}
+        error={tripEditError}
+        disabled={loading}
+        showRegenerateWarning={hasExistingPlan}
+      />
     </div>
   );
 }

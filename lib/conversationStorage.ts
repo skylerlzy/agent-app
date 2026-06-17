@@ -16,6 +16,10 @@ export interface StoredChatMessage {
 }
 
 export interface ConversationPreferences {
+  /** 出发地 */
+  origin: string;
+  /** 目的地 */
+  destination: string;
   tripStart: string;
   tripEnd: string;
   travelThemes: string[];
@@ -42,6 +46,8 @@ export interface LocalConversation {
 
 export function defaultPreferences(): ConversationPreferences {
   return {
+    origin: "",
+    destination: "",
     tripStart: "",
     tripEnd: "",
     travelThemes: [],
@@ -123,6 +129,8 @@ export function toTripPreferences(prefs: ConversationPreferences): TripPreferenc
       budgetNum !== undefined && Number.isFinite(budgetNum) && budgetNum > 0 ? budgetNum : undefined,
     dietaryNotes: prefs.dietaryNotes.trim() || undefined,
     additionalNotes: prefs.additionalNotes.trim() || undefined,
+    destination: prefs.destination.trim() || undefined,
+    originCity: prefs.origin.trim() || undefined,
   };
 }
 

@@ -40,6 +40,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        voyage: {
+          sky: "hsl(var(--voyage-sky))",
+          amber: "hsl(var(--voyage-amber))",
+          teal: "hsl(var(--voyage-teal))",
+          violet: "hsl(var(--voyage-violet))",
+          coral: "hsl(var(--voyage-coral))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -49,6 +56,11 @@ const config: Config = {
       keyframes: {
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        /** 底部工具条弹层：自下而上滑入 */
+        "popover-rise": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "gradient-flow": {
@@ -85,18 +97,42 @@ const config: Config = {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
         },
+        /** 偏好标签选中弹跳 */
+        "chip-pop": {
+          "0%": { transform: "scale(1)" },
+          "45%": { transform: "scale(1.1)" },
+          "100%": { transform: "scale(1)" },
+        },
+        /** 偏好标签 emoji 轻摆 */
+        "chip-emoji-wiggle": {
+          "0%, 100%": { transform: "rotate(0deg) scale(1)" },
+          "25%": { transform: "rotate(-10deg) scale(1.08)" },
+          "75%": { transform: "rotate(8deg) scale(1.05)" },
+        },
+        /** 选中标签微光扫过 */
+        "chip-shine": {
+          "0%": { backgroundPosition: "200% center" },
+          "100%": { backgroundPosition: "-200% center" },
+        },
       },
       animation: {
         "fade-in": "fade-in 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "popover-rise": "popover-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
         "gradient-flow": "gradient-flow 14s ease-in-out infinite",
         "logo-breathe": "logo-breathe 4.8s ease-in-out infinite",
         "plane-sway": "plane-sway 3.2s ease-in-out infinite",
         "card-enter": "card-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both",
         "node-breathe": "node-breathe 2.4s ease-in-out infinite",
         "marquee-left": "marquee-left 80s linear infinite",
+        "chip-pop": "chip-pop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+        "chip-emoji-wiggle": "chip-emoji-wiggle 520ms ease-in-out",
+        "chip-shine": "chip-shine 2.4s ease-in-out infinite",
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(circle, var(--tw-gradient-stops))",
+        "voyage-brand": "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--voyage-teal)) 45%, hsl(var(--voyage-sky)) 100%)",
+        "voyage-warm": "linear-gradient(135deg, hsl(var(--primary) / 0.15) 0%, hsl(var(--voyage-amber) / 0.12) 50%, hsl(var(--voyage-coral) / 0.1) 100%)",
+        "voyage-cool": "linear-gradient(135deg, hsl(var(--voyage-sky) / 0.14) 0%, hsl(var(--voyage-violet) / 0.1) 55%, hsl(var(--primary) / 0.12) 100%)",
       },
       transitionTimingFunction: {
         soft: "cubic-bezier(0.22, 1, 0.36, 1)",

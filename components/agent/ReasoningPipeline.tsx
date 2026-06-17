@@ -66,15 +66,16 @@ export function ReasoningPipeline({ events, isRunning, className }: ReasoningPip
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-border/70 bg-card/90 p-4 shadow-md shadow-primary/5 ring-1 ring-primary/5 sm:p-5",
+        "relative overflow-hidden rounded-2xl border border-voyage-sky/20 voyage-surface-wash p-4 shadow-md shadow-voyage-sky/8 ring-1 ring-primary/8 sm:p-5",
         className
       )}
     >
       <div
-        className="pointer-events-none absolute inset-0 opacity-80"
+        className="pointer-events-none absolute inset-0 opacity-90"
         style={{
-          backgroundImage: `radial-gradient(circle at 50% 38%, hsl(168 40% 92% / 0.95), transparent 55%),
-            radial-gradient(circle at 88% 42%, hsl(175 35% 90% / 0.45), transparent 42%)`,
+          backgroundImage: `radial-gradient(circle at 22% 30%, hsl(var(--primary) / 0.14), transparent 48%),
+            radial-gradient(circle at 78% 35%, hsl(var(--voyage-sky) / 0.12), transparent 45%),
+            radial-gradient(circle at 55% 85%, hsl(var(--voyage-amber) / 0.08), transparent 40%)`,
         }}
       />
       <p className="relative mb-1 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -154,7 +155,7 @@ export function ReasoningPipeline({ events, isRunning, className }: ReasoningPip
         <div
           className={cn(
             "absolute left-[4%] top-[36%] z-10 flex w-[4.5rem] flex-col items-center gap-1 rounded-xl border px-2 py-2 transition-all duration-500",
-            userOn ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-border/60 bg-background/60 text-muted-foreground"
+            userOn ? "border-voyage-sky/45 bg-gradient-to-br from-voyage-sky/15 to-voyage-sky/5 text-voyage-sky shadow-sm shadow-voyage-sky/15" : "border-border/60 bg-background/60 text-muted-foreground"
           )}
         >
           <span
@@ -173,7 +174,7 @@ export function ReasoningPipeline({ events, isRunning, className }: ReasoningPip
           className={cn(
             "absolute left-1/2 top-[36%] z-10 flex h-[4.75rem] w-[4.75rem] -translate-x-1/2 flex-col items-center justify-center rounded-full border-2 transition-all duration-500",
             llmOn && effectiveStage !== "done"
-              ? "border-primary/45 bg-primary/[0.12] text-primary shadow-lg shadow-primary/15"
+              ? "border-primary/50 bg-gradient-to-br from-primary/18 to-voyage-teal/12 text-primary shadow-lg shadow-primary/20"
               : "border-border/70 bg-card/90 text-muted-foreground"
           )}
         >
@@ -194,7 +195,7 @@ export function ReasoningPipeline({ events, isRunning, className }: ReasoningPip
         <div
           className={cn(
             "absolute right-[4%] top-[36%] z-10 flex w-[4.5rem] flex-col items-center gap-1 rounded-xl border px-2 py-2 transition-all duration-500",
-            envOn ? "border-primary/40 bg-primary/10 text-primary shadow-sm" : "border-border/60 bg-background/60 text-muted-foreground"
+            envOn ? "border-voyage-amber/45 bg-gradient-to-br from-voyage-amber/15 to-voyage-coral/8 text-voyage-amber shadow-sm shadow-voyage-amber/15" : "border-border/60 bg-background/60 text-muted-foreground"
           )}
         >
           <span

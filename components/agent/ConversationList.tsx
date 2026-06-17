@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CHAT_PANEL_STYLES } from "@/lib/voyageTheme";
 import { cn } from "@/lib/utils";
 import { MessageSquarePlus, Pencil, Search, Trash2, X, Check } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -70,14 +71,15 @@ export function ConversationList({
   };
 
   return (
-    <aside
-      className={cn(
-        "flex h-full min-h-0 flex-col rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-primary/5",
-        className
-      )}
-    >
-      <div className="shrink-0 space-y-3 border-b border-border/60 p-3">
-        <Button type="button" onClick={onNew} className="h-9 w-full gap-2 text-sm shadow-sm" size="sm">
+    <aside className={cn(CHAT_PANEL_STYLES.shell, className)}>
+      <div className={CHAT_PANEL_STYLES.topStripe} aria-hidden />
+      <div className={cn(CHAT_PANEL_STYLES.header, "relative z-[2] space-y-3 p-3")}>
+        <Button
+          type="button"
+          onClick={onNew}
+          className="h-9 w-full gap-2 border-0 bg-voyage-brand text-sm text-primary-foreground shadow-md shadow-primary/25 hover:brightness-105"
+          size="sm"
+        >
           <MessageSquarePlus className="h-4 w-4" />
           新建对话
         </Button>
@@ -92,7 +94,7 @@ export function ConversationList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className={cn(CHAT_PANEL_STYLES.body, "relative z-[2] p-2")}>
         {filtered.length === 0 ? (
           <p className="px-2 py-8 text-center text-xs text-muted-foreground">
             {search.trim() ? "无匹配对话" : "暂无对话，点击上方新建"}
@@ -126,18 +128,29 @@ export function ConversationList({
                   ) : (
                     <div
                       className={cn(
-                        "group flex items-start gap-1 rounded-lg border px-2 py-2 transition-colors",
+                        "group relative flex items-start gap-1 rounded-lg border px-2 py-2 transition-all duration-200",
                         active
-                          ? "border-primary/35 bg-primary/10 shadow-sm"
-                          : "border-transparent hover:border-border/60 hover:bg-muted/40"
+                          ? "border-primary/35 bg-gradient-to-r from-primary/12 via-emerald-500/8 to-voyage-sky/8 shadow-sm shadow-primary/10"
+                          : "border-transparent hover:border-voyage-sky/25 hover:bg-voyage-sky/8"
                       )}
                     >
+                      {active ? (
+                        <span
+                          aria-hidden
+                          className="absolute bottom-2 left-0 top-2 w-1 rounded-full bg-gradient-to-b from-primary via-voyage-teal to-voyage-sky"
+                        />
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => onSelect(c.id)}
-                        className="min-w-0 flex-1 text-left"
+                        className={cn("min-w-0 flex-1 text-left", active && "pl-2")}
                       >
-                        <p className={cn("truncate text-sm font-medium", active ? "text-primary" : "text-foreground")}>
+                        <p
+                          className={cn(
+                            "truncate text-sm font-medium",
+                            active ? "text-primary" : "text-foreground group-hover:text-primary/90"
+                          )}
+                        >
                           {c.title}
                         </p>
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
