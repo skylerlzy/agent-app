@@ -11,18 +11,10 @@ import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { formatAgentKnowledgeContext, ensureKnowledgeCitations } from "../knowledge";
+import { decideQuickReplyTools } from "../intent/LLMQuickReplyTools";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { appendSkillSection } from "../skills/appendSkillSection";
 import { inferCityFromText } from "../tools/ToolArgumentValidator";
-
-const WEATHER_QA_PATTERNS: RegExp[] = [
-  /天气怎么样/,
-  /天气如何/,
-  /查(?:一下|查)?.*天气/,
-  /会下雨/,
-  /气温/,
-  /多少度/,
-];
 
 function toolEnabled(name: ToolName, enabled?: ToolName[]): boolean {
   if (!enabled?.length) return true;
@@ -70,11 +62,15 @@ export class LightweightWorkflow implements IAutonomousAgent {
     await push(modeEvent);
 
     let toolContextBlock = "";
-    const wantsWeather = WEATHER_QA_PATTERNS.some((p) => p.test(input.goal.rawText));
+    const toolDecision = await decideQuickReplyTools(this.llm, input.goal.rawText);
     const weatherTool = this.toolRegistry?.get("weather_forecast");
+    const usedWeatherTool =
+      toolDecision.useWeather &&
+      Boolean(weatherTool) &&
+      toolEnabled("weather_forecast", input.enabledToolNames);
 
     if (
-      wantsWeather &&
+      toolDecision.useWeather &&
       weatherTool &&
       toolEnabled("weather_forecast", input.enabledToolNames)
     ) {
@@ -136,11 +132,12 @@ export class LightweightWorkflow implements IAutonomousAgent {
 
     const system = appendSkillSection(
       `你是智能出行助手。本轮为「快速回复」模式：
-- **禁止**重新制定完整行程${wantsWeather && toolContextBlock ? "（已提供一次天气查询结果，请据此回答）" : "，**禁止**假装调用了天气/地图等外部 API"}。
+- **禁止**重新制定完整行程${usedWeatherTool && toolContextBlock ? "（已提供一次天气查询结果，请据此回答）" : "，**禁止**假装调用了天气/地图等外部 API"}。
 - 优先从【当前完整行程方案】与【近期对话】中提取信息作答。
 - 必须遵守【长期记忆】中的用户偏好和约束；若引用【RAG 知识片段】，句末保留 [来源: …] 标记。
 - 若用户要求复述某一天（如 Day1 / 第一天），只清晰呈现该日内容，不要重复其他天。
 - 若方案中缺少用户问的信息，明确说明「当前方案未包含」，不要编造。
+- 若用户问「还有什么好玩的/有什么推荐/值得去吗/附近还能去哪」等**探索型问题**：结合 RAG 与常识列出 3～5 个可选亮点，说明与当前方案的关系（可去可不去）；**不要**声称已修改右侧行程，**不要**自动把推荐写入方案（除非用户明确要求加入某日）。
 - 回答使用 Markdown，可分段但不必包含完整七段行程模板。`,
       input.skillSystemSection
     );

@@ -27,6 +27,30 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+/** 按 Markdown 标题切段，保留标题作为下文上下文 */
+function splitByMarkdownHeadings(text: string): string[] {
+  const normalized = normalizeText(text);
+  const parts = normalized.split(/(?=^#{1,3}\s+)/m).map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return splitParagraphs(text);
+
+  const sections: string[] = [];
+  let headingStack = "";
+
+  for (const part of parts) {
+    const headingMatch = part.match(/^(#{1,3}\s+.+?)(?:\n|$)/);
+    if (headingMatch) {
+      headingStack = headingMatch[1].trim();
+      const body = part.slice(headingMatch[0].length).trim();
+      if (body) sections.push(`${headingStack}\n\n${body}`);
+      else sections.push(headingStack);
+      continue;
+    }
+    sections.push(headingStack ? `${headingStack}\n\n${part}` : part);
+  }
+
+  return sections.filter(Boolean);
+}
+
 function takeWithOverlap(text: string, maxChars: number, overlapChars: number): string[] {
   const chunks: string[] = [];
   let cursor = 0;
@@ -44,7 +68,7 @@ export function chunkDocument(text: string, options: ChunkDocumentOptions): Docu
   const overlapChars = Math.max(0, Math.min(options.overlapChars ?? 120, Math.floor(maxChars / 3)));
   const maxChunks = Math.max(1, Math.min(options.maxChunks ?? 80, 120));
 
-  const paragraphs = splitParagraphs(text);
+  const paragraphs = splitByMarkdownHeadings(text);
   const chunks: string[] = [];
   let buffer = "";
 
@@ -70,9 +94,12 @@ export function chunkDocument(text: string, options: ChunkDocumentOptions): Docu
   if (buffer.trim()) chunks.push(buffer.trim());
   const fallback = chunks.length ? chunks : takeWithOverlap(normalizeText(text), maxChars, overlapChars);
 
-  return fallback.slice(0, maxChunks).map((content, i) => ({
-    content,
-    chunkIndex: i,
-    citation: `第 ${i + 1} 段`,
-  }));
+  return fallback.slice(0, maxChunks).map((content, i) => {
+    const heading = content.match(/^#{1,3}\s+(.+)$/m)?.[1]?.trim();
+    return {
+      content,
+      chunkIndex: i,
+      citation: heading ? `章节「${heading.slice(0, 24)}」` : `第 ${i + 1} 段`,
+    };
+  });
 }

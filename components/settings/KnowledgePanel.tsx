@@ -1,300 +1,236 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { KnowledgeChunk } from "@/lib/agent/contracts";
+import { EXPECTED_BUILTIN_DOCUMENT_COUNT } from "@/lib/agent/knowledge/builtinKnowledge";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Database, FileUp, Pencil, RefreshCcw, Search, Trash2, Upload, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Database, FileUp, Search, Trash2, Upload, X } from "lucide-react";
 
-type SourceType = "markdown" | "text" | "pdf";
+type KnowledgeDocListItem = {
+  id: string;
+  title: string;
+  city?: string;
+  tags: string[];
+  chunkCount: number;
+  embeddingStatus?: "pending" | "ready" | "failed";
+  isBuiltin?: boolean;
+  sourceUrl?: string;
+  tier?: number;
+  createdAt?: number;
+};
 
-function parseTags(input: string): string[] {
-  return input
-    .split(/[,，\s]+/g)
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+function Modal({
+  title,
+  onClose,
+  children,
+  wide,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-background/70 backdrop-blur-sm"
+        aria-label="关闭"
+        onClick={onClose}
+      />
+      <GlassCard
+        className={cn(
+          "relative z-10 max-h-[85vh] w-full overflow-hidden shadow-xl",
+          wide ? "max-w-3xl" : "max-w-lg"
+        )}
+      >
+        <CardHeader className="flex flex-row items-center justify-between border-b border-border/60 pb-3">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="max-h-[calc(85vh-4rem)] overflow-y-auto pt-4">{children}</CardContent>
+      </GlassCard>
+    </div>
+  );
 }
 
-function sourceTypeFromName(name: string): SourceType {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "markdown";
-  if (lower.endsWith(".pdf")) return "pdf";
-  return "text";
+function embeddingStatusLabel(status?: KnowledgeDocListItem["embeddingStatus"]) {
+  if (status === "ready") return "向量就绪";
+  if (status === "pending") return "向量化中";
+  if (status === "failed") return "向量失败（仍可用关键词检索）";
+  return null;
 }
 
 export function KnowledgePanel() {
-  const docs = useQuery(api.knowledge.listDocuments, { limit: 100 });
-  const uploadDocument = useMutation(api.knowledge.uploadDocument);
-  const updateDocument = useMutation(api.knowledge.updateDocument);
-  const rebuildDocument = useMutation(api.knowledge.rebuildDocument);
-  const removeDocument = useMutation(api.knowledge.removeDocument);
+  const retrieveHybrid = useAction(api.knowledge.retrieveHybrid);
+  const uploadText = useMutation(api.knowledge.uploadText);
+  const deleteDocument = useMutation(api.knowledge.deleteDocument);
+  const bundleStatus = useQuery(api.knowledge.builtinBundleStatus);
+  const allDocuments = useQuery(api.knowledge.listDocuments, { limit: 200 });
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState("");
-  const [city, setCity] = useState("");
-  const [tagsText, setTagsText] = useState("");
-  const [sourceType, setSourceType] = useState<SourceType>("markdown");
-  const [text, setText] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [searchResult, setSearchResult] = useState<{
+    chunks: KnowledgeChunk[];
+    mode: "keyword" | "hybrid";
+  } | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const editingDoc = useQuery(
-    api.knowledge.getDocument,
-    editingId ? { documentId: editingId } : "skip"
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadCity, setUploadCity] = useState("");
+  const [uploadBody, setUploadBody] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const userDocuments = useMemo(
+    () => (allDocuments ?? []).filter((d) => !d.isBuiltin) as KnowledgeDocListItem[],
+    [allDocuments]
+  );
+  const builtinDocuments = useMemo(
+    () => (allDocuments ?? []).filter((d) => d.isBuiltin) as KnowledgeDocListItem[],
+    [allDocuments]
   );
 
-  const results = useQuery(
-    api.knowledge.retrieve,
-    searchQuery.trim() ? { query: searchQuery.trim(), topK: 5 } : "skip"
-  );
-
-  const documents = useMemo(() => docs ?? [], [docs]);
+  const handleSearch = useCallback(async () => {
+    const q = searchDraft.trim();
+    setSearchQuery(q);
+    setSearchResult(null);
+    if (!q) return;
+    setSearchLoading(true);
+    setError(null);
+    try {
+      const res = await retrieveHybrid({ query: q, topK: 2 });
+      setSearchResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [retrieveHybrid, searchDraft]);
 
   const handleUpload = useCallback(async () => {
-    const body = text.trim();
-    if (!body) {
-      setError("请粘贴或选择攻略文本。");
+    const title = uploadTitle.trim();
+    const text = uploadBody.trim();
+    if (!title || text.length < 20) {
+      setError("请填写标题，且正文至少 20 字。");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const cleanCity = city.trim();
-      const res = await uploadDocument({
-        title: title.trim() || "未命名攻略",
-        text: body,
-        sourceType,
-        tags: parseTags(tagsText),
-        ...(cleanCity ? { city: cleanCity } : {}),
+      await uploadText({
+        title,
+        text,
+        ...(uploadCity.trim() ? { city: uploadCity.trim() } : {}),
+        sourceType: "markdown",
       });
-      setText("");
-      setTitle("");
-      setCity("");
-      setTagsText("");
-      setSourceType("markdown");
-      setSearchQuery(searchQuery || title.trim());
-      if (!res.chunkCount) setError("文档已保存，但未生成可检索分块。");
+      setUploadOpen(false);
+      setUploadTitle("");
+      setUploadCity("");
+      setUploadBody("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-  }, [city, searchQuery, sourceType, tagsText, text, title, uploadDocument]);
+  }, [uploadBody, uploadCity, uploadText, uploadTitle]);
 
-  const handleFile = useCallback(async (file: File) => {
-    const fileText = await file.text();
-    setTitle((prev) => prev || file.name.replace(/\.[^.]+$/, ""));
-    setSourceType(sourceTypeFromName(file.name));
-    setText(fileText);
-  }, []);
+  const handleFilePick = useCallback(async (file: File) => {
+    const text = await file.text();
+    setUploadBody(text);
+    if (!uploadTitle.trim()) {
+      const base = file.name.replace(/\.(md|markdown|txt)$/i, "");
+      setUploadTitle(base || "我的出行攻略");
+    }
+    setUploadOpen(true);
+  }, [uploadTitle]);
 
-  const handleRebuild = useCallback(
-    async (documentId: string) => {
+  const handleDelete = useCallback(
+    async (docId: string) => {
+      if (!window.confirm("确定删除这份用户文档？删除后无法恢复。")) return;
       setBusy(true);
       setError(null);
       try {
-        await rebuildDocument({ documentId: documentId as Id<"knowledgeDocuments"> });
+        await deleteDocument({ documentId: docId as Id<"knowledgeDocuments"> });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);
       }
     },
-    [rebuildDocument]
+    [deleteDocument]
   );
 
-  const handleRemove = useCallback(
-    async (documentId: string) => {
-      if (!window.confirm("确定删除该知识文档及其分块？")) return;
-      setBusy(true);
-      setError(null);
-      try {
-        await removeDocument({ documentId: documentId as Id<"knowledgeDocuments"> });
-        if (editingId === documentId) setEditingId(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setBusy(false);
-      }
-    },
-    [editingId, removeDocument]
-  );
-
-  const handleStartEdit = useCallback((documentId: string) => {
-    setEditingId(documentId);
-    setError(null);
-  }, []);
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingId || !editingDoc) return;
-    const body = text.trim();
-    if (body.length < 20) {
-      setError("文档内容至少需要 20 个字符。");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await updateDocument({
-        documentId: editingId as Id<"knowledgeDocuments">,
-        title: title.trim() || editingDoc.title,
-        text: body,
-        tags: parseTags(tagsText),
-        city: city.trim() || undefined,
-      });
-      setEditingId(null);
-      setText("");
-      setTitle("");
-      setCity("");
-      setTagsText("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, [city, editingDoc, editingId, tagsText, text, title, updateDocument]);
-
-  useEffect(() => {
-    if (!editingDoc || editingId !== editingDoc.id) return;
-    setTitle(editingDoc.title);
-    setCity(editingDoc.city ?? "");
-    setTagsText(editingDoc.tags.join(", "));
-    setText(editingDoc.originalText);
-    setSourceType(editingDoc.sourceType);
-  }, [editingDoc, editingId]);
-
-  if (docs === undefined) {
-    return (
-      <GlassCard className="cursor-default border-dashed">
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">加载知识库…</CardContent>
-      </GlassCard>
-    );
-  }
+  const builtinCount = bundleStatus?.documentCount ?? builtinDocuments.length;
 
   return (
     <div className="space-y-6">
       <GlassCard className="cursor-default">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Database className="h-4 w-4 text-primary" />
-            上传攻略知识
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Database className="h-5 w-5 text-primary" />
+            RAG 知识库
           </CardTitle>
-          <CardDescription className="text-xs">
-            系统已预置南京、珠海等出行攻略（内置知识库）；您也可上传 Markdown/纯文本补充。检索时会合并内置与自定义内容。
+          <CardDescription className="text-xs leading-relaxed">
+            内置 {EXPECTED_BUILTIN_DOCUMENT_COUNT} 份中国城市出行指南已随项目打包在{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-[10px]">lib/agent/knowledge/data/</code>
+            ，关键词检索无需联网。您也可上传自己的 Markdown / 文本攻略，与内置库共同参与 Agent 检索。
+            {bundleStatus?.ok ? (
+              <span className="mt-1 block text-emerald-600 dark:text-emerald-400">
+                {bundleStatus.message}
+              </span>
+            ) : bundleStatus ? (
+              <span className="mt-1 block text-destructive">{bundleStatus.message}</span>
+            ) : null}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="flex flex-wrap gap-2 pt-0">
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
+            disabled={busy}
+            onClick={() => setUploadOpen(true)}
+          >
+            <Upload className="h-4 w-4" />
+            上传攻略
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <FileUp className="h-4 w-4" />
+            选择 .md / .txt
+          </Button>
           <input
-            ref={fileRef}
+            ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.pdf,text/plain,text/markdown,application/pdf"
+            accept=".md,.markdown,.txt,text/plain,text/markdown"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void handleFile(file);
+              if (file) void handleFilePick(file);
               e.target.value = "";
             }}
           />
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="文档标题，如 南京慢游攻略" disabled={busy} />
-            <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="城市，可选，如 南京" disabled={busy} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
-            <select
-              value={sourceType}
-              disabled={busy}
-              onChange={(e) => setSourceType(e.target.value as SourceType)}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
-            >
-              <option value="markdown">Markdown</option>
-              <option value="text">纯文本</option>
-              <option value="pdf">PDF 文本</option>
-            </select>
-            <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="标签，用逗号分隔，如 亲子,慢节奏,美食" disabled={busy} />
-          </div>
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="粘贴攻略、游记或地点说明。上传后会自动分块，Agent 回答时可标注 [来源: 文档 · 段落]。"
-            className="min-h-[220px] font-mono text-xs"
-            disabled={busy}
-          />
-          <div className="flex flex-wrap justify-between gap-2">
-            <Button type="button" variant="outline" className="gap-1.5" disabled={busy} onClick={() => fileRef.current?.click()}>
-              <FileUp className="h-4 w-4" />
-              选择文件
-            </Button>
-            <Button type="button" className="gap-1.5" disabled={busy || !text.trim()} onClick={() => void handleUpload()}>
-              <Upload className="h-4 w-4" />
-              上传并分块
-            </Button>
-          </div>
         </CardContent>
       </GlassCard>
-
-      {editingId ? (
-        <GlassCard className="cursor-default border-primary/25">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between gap-2 text-base">
-              <span className="flex items-center gap-2">
-                <Pencil className="h-4 w-4 text-primary" />
-                编辑知识文档
-              </span>
-              <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setEditingId(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {editingId?.startsWith("builtin:") ? "内置知识库只读预览。" : "保存后会自动重建分块索引，Agent 将检索到最新内容（动态更新知识）。"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {editingDoc === undefined ? (
-              <p className="text-xs text-muted-foreground">加载文档…</p>
-            ) : (
-              <>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
-                  <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="城市" disabled={busy} />
-                </div>
-                <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="标签" disabled={busy} />
-                <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  className="min-h-[220px] font-mono text-xs"
-                  disabled={busy || editingId.startsWith("builtin:")}
-                  readOnly={editingId.startsWith("builtin:")}
-                />
-                <div className="flex justify-end gap-2">
-                  {!editingId.startsWith("builtin:") ? (
-                  <Button type="button" className="gap-1.5" disabled={busy || !text.trim()} onClick={() => void handleSaveEdit()}>
-                    保存并重建索引
-                  </Button>
-                  ) : (
-                  <Button type="button" variant="outline" onClick={() => setEditingId(null)}>关闭</Button>
-                  )}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </GlassCard>
-      ) : null}
-
-      {error ? (
-        <p className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
 
       <GlassCard className="cursor-default">
         <CardHeader className="pb-3">
@@ -303,122 +239,197 @@ export function KnowledgePanel() {
             检索预览
           </CardTitle>
           <CardDescription className="text-xs">
-            输入一次用户问题，查看会注入 Agent 的 Top-K 知识块和出处标记。
+            与 Agent 运行时一致；检索内置库 + 您的上传文档，展示 score 最高的 2 条知识块。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2">
-            <Input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="例：南京不吃辣有什么美食推荐" />
-            <Button type="button" className="shrink-0 gap-1.5" onClick={() => setSearchQuery(searchDraft)}>
+            <Input
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder="例：南京晚上适合去哪"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSearch();
+              }}
+            />
+            <Button type="button" className="shrink-0 gap-1.5" onClick={() => void handleSearch()}>
               <Search className="h-4 w-4" />
               检索
             </Button>
           </div>
           {searchQuery ? (
             <div className="space-y-2">
-              {results === undefined ? (
-                <p className="text-xs text-muted-foreground">检索中…</p>
-              ) : results.length === 0 ? (
+              {searchLoading ? (
+                <p className="text-xs text-muted-foreground">混合检索中…</p>
+              ) : !searchResult?.chunks.length ? (
                 <p className="text-xs text-muted-foreground">没有匹配的知识块。</p>
               ) : (
-                results.map((chunk) => (
-                  <div key={chunk.chunkId} className="rounded-lg border border-border/70 bg-muted/20 p-3">
-                    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                      <span className="font-medium text-foreground">{chunk.documentTitle}</span>
-                      <span>[来源: {chunk.documentTitle} · {chunk.citation}]</span>
-                      <span>score {chunk.score}</span>
+                <>
+                  {searchResult.mode ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      模式：
+                      {searchResult.mode === "hybrid"
+                        ? "混合检索（关键词 + 向量）"
+                        : "关键词检索"}
+                    </p>
+                  ) : null}
+                  {searchResult.chunks.map((chunk) => (
+                    <div
+                      key={chunk.chunkId}
+                      className="rounded-lg border border-border/70 bg-muted/20 p-3"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="font-medium text-foreground">{chunk.documentTitle}</span>
+                        <span>
+                          [来源: {chunk.documentTitle} · {chunk.citation}]
+                        </span>
+                        <span>score {chunk.score}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-xs leading-5 text-foreground">
+                        {chunk.content}
+                      </p>
                     </div>
-                    <p className="line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-foreground">{chunk.content}</p>
-                  </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
           ) : null}
         </CardContent>
       </GlassCard>
 
+      {error ? (
+        <p className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">知识文档</h2>
-            <p className="text-xs text-muted-foreground">上传后可重建分块索引，删除会同步清理所有知识块。</p>
+            <h2 className="text-sm font-semibold text-foreground">我的文档</h2>
+            <p className="text-xs text-muted-foreground">上传后自动分块并向量化，参与 Agent 检索</p>
           </div>
-          <span className="text-xs text-muted-foreground">{documents.length} 个</span>
+          <span className="text-xs text-muted-foreground">{userDocuments.length} 个</span>
         </div>
-
-        {documents.length === 0 ? (
+        {!userDocuments.length ? (
           <GlassCard className="cursor-default border-dashed">
-            <CardContent className="py-8 text-center text-xs text-muted-foreground">
-              暂无知识文档。上传城市攻略后，Agent 会按问题检索相关片段。
+            <CardContent className="py-6 text-center text-xs text-muted-foreground">
+              尚未上传文档。可粘贴 Markdown 或选择 .md / .txt 文件。
             </CardContent>
           </GlassCard>
         ) : (
-          <div className="grid gap-3">
-            {documents.map((doc) => {
-              const isBuiltin = "isBuiltin" in doc && doc.isBuiltin === true;
-              return (
+          <div className="grid gap-2">
+            {userDocuments.map((doc) => (
               <GlassCard key={doc.id} className="cursor-default">
-                <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0 flex-1">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-sm font-semibold text-foreground">{doc.title}</h3>
-                      {isBuiltin ? (
-                        <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                          内置
-                        </span>
-                      ) : null}
-                      <span className="rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-                        {doc.chunkCount} 块
-                      </span>
+                      <h3 className="text-sm font-medium text-foreground">{doc.title}</h3>
                       {doc.city ? (
                         <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
                           {doc.city}
                         </span>
                       ) : null}
+                      <span className="text-[11px] text-muted-foreground">{doc.chunkCount} 块</span>
+                      {embeddingStatusLabel(doc.embeddingStatus) ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          {embeddingStatusLabel(doc.embeddingStatus)}
+                        </span>
+                      ) : null}
                     </div>
-                    {doc.tags.length ? (
-                      <p className="mt-2 text-[11px] text-muted-foreground">{doc.tags.join(" · ")}</p>
-                    ) : null}
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {doc.sourceType} · {new Date(doc.updatedAt).toLocaleString()}
-                    </p>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    {!isBuiltin ? (
-                      <>
-                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={busy} onClick={() => handleStartEdit(doc.id)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      编辑
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={busy} onClick={() => void handleRebuild(doc.id)}>
-                      <RefreshCcw className="h-3.5 w-3.5" />
-                      重建
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      disabled={busy}
-                      onClick={() => void handleRemove(doc.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      删除
-                    </Button>
-                      </>
-                    ) : (
-                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={busy} onClick={() => handleStartEdit(doc.id)}>
-                        预览
-                      </Button>
-                    )}
-                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10"
+                    disabled={busy}
+                    onClick={() => void handleDelete(doc.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    删除
+                  </Button>
                 </CardContent>
               </GlassCard>
-            );
-            })}
+            ))}
           </div>
         )}
       </section>
+
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">内置文档（只读）</h2>
+            <p className="text-xs text-muted-foreground">中国一线 / 二线城市 Wikivoyage 指南，本地 JSON 打包</p>
+          </div>
+          <span className="text-xs text-muted-foreground">{builtinCount} 个</span>
+        </div>
+        <div className="grid gap-2 max-h-[420px] overflow-y-auto pr-1">
+          {builtinDocuments.map((doc) => (
+            <GlassCard key={doc.id} className="cursor-default">
+              <CardContent className="py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-medium text-foreground">{doc.title}</h3>
+                  {doc.city ? (
+                    <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                      {doc.city}
+                    </span>
+                  ) : null}
+                  <span className="rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    内置
+                  </span>
+                  {doc.tier === 1 ? (
+                    <span className="text-[11px] text-muted-foreground">一线</span>
+                  ) : doc.tier === 2 ? (
+                    <span className="text-[11px] text-muted-foreground">二线</span>
+                  ) : null}
+                </div>
+                {doc.sourceUrl ? (
+                  <a
+                    href={doc.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block truncate text-[11px] text-primary hover:underline"
+                  >
+                    {doc.sourceUrl}
+                  </a>
+                ) : null}
+              </CardContent>
+            </GlassCard>
+          ))}
+        </div>
+      </section>
+
+      {uploadOpen ? (
+        <Modal title="上传出行攻略" onClose={() => setUploadOpen(false)} wide>
+          <div className="space-y-3">
+            <Input
+              value={uploadTitle}
+              onChange={(e) => setUploadTitle(e.target.value)}
+              placeholder="文档标题，如：南京周末慢游笔记"
+            />
+            <Input
+              value={uploadCity}
+              onChange={(e) => setUploadCity(e.target.value)}
+              placeholder="关联城市（可选），如：南京"
+            />
+            <Textarea
+              value={uploadBody}
+              onChange={(e) => setUploadBody(e.target.value)}
+              placeholder="粘贴 Markdown 或纯文本攻略…"
+              className="min-h-[240px] font-mono text-xs"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>
+                取消
+              </Button>
+              <Button type="button" disabled={busy} onClick={() => void handleUpload()}>
+                {busy ? "上传中…" : "保存并分块"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

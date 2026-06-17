@@ -156,10 +156,26 @@ function EventBody({ e }: { e: ReasoningEvent }) {
           {p.skipped ? (
             <p className="text-muted-foreground">已跳过检索：{p.reason ?? "无需外部知识库"}</p>
           ) : (
-            <p className="text-foreground">
-              召回 <span className="font-medium">{p.chunkCount}</span> 条知识块
-              {p.documentTitles.length ? `（${p.documentTitles.join("、")}）` : ""}
-            </p>
+            <>
+              <p className="text-foreground">
+                召回 <span className="font-medium">{p.chunkCount}</span> 条知识块
+                {p.documentTitles.length ? `（${p.documentTitles.join("、")}）` : ""}
+              </p>
+              {p.retrievalMode ? (
+                <p className="text-muted-foreground">
+                  检索模式：{p.retrievalMode === "hybrid" ? "混合检索（关键词 + 向量）" : "关键词检索"}
+                </p>
+              ) : null}
+              {p.topScores?.length ? (
+                <ul className="list-inside list-disc text-[11px] text-muted-foreground">
+                  {p.topScores.map((row, i) => (
+                    <li key={`${row.title}-${i}`}>
+                      {row.title} · {row.citation} · score {row.score.toFixed(2)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
           )}
           <p className="font-mono text-[11px] text-muted-foreground">query: {p.query}</p>
         </div>

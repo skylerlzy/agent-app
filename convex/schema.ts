@@ -91,6 +91,9 @@ export default defineSchema({
     tags: v.array(v.string()),
     city: v.optional(v.string()),
     chunkCount: v.number(),
+    embeddingStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("ready"), v.literal("failed"))
+    ),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -117,6 +120,7 @@ export default defineSchema({
     tags: v.array(v.string()),
     city: v.optional(v.string()),
     chunkIndex: v.number(),
+    embedding: v.optional(v.array(v.float64())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

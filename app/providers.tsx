@@ -17,7 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
       telemetry={false}
       appearance={{
         variables: {
-          colorPrimary: "hsl(168 30% 38%)",
+          colorPrimary: "hsl(168 32% 36%)",
           colorText: "hsl(196 28% 22%)",
           colorTextSecondary: "hsl(196 14% 40%)",
           colorBackground: "hsl(165 28% 99%)",

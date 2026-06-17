@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireUserId } from "./authHelpers";
 import { conversationIdKey } from "./conversationIds";
-import { extractMemoryCandidates, type MemoryKind } from "../lib/agent/knowledge";
+import { type MemoryKind } from "../lib/agent/knowledge";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -171,19 +171,24 @@ export const listLongTermMemoriesInternal = internalQuery({
   },
 });
 
-export const extractFromTurnInternal = internalMutation({
+export const saveCandidatesInternal = internalMutation({
   args: {
     userId: v.string(),
     conversationId: v.id("conversations"),
-    userMessage: v.string(),
-    assistantReply: v.string(),
+    candidates: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("preference"),
+          v.literal("fact"),
+          v.literal("constraint"),
+          v.literal("other")
+        ),
+        content: v.string(),
+      })
+    ),
   },
   async handler(ctx, args) {
-    const candidates = extractMemoryCandidates({
-      userMessage: args.userMessage,
-      assistantReply: args.assistantReply,
-    });
-    if (!candidates.length) return [];
+    if (!args.candidates.length) return [];
 
     const existing = await ctx.db
       .query("userMemories")
@@ -193,7 +198,7 @@ export const extractFromTurnInternal = internalMutation({
 
     const now = Date.now();
     const created: Array<ReturnType<typeof toPublicMemory>> = [];
-    for (const candidate of candidates) {
+    for (const candidate of args.candidates) {
       const content = normalizeContent(candidate.content);
       if (!content || existingContent.has(content)) continue;
       const id = await ctx.db.insert("userMemories", {

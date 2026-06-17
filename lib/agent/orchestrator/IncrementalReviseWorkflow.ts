@@ -4,8 +4,10 @@ import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import {
   fallbackIncrementalReviseOutput,
+  isGenericIncrementalChatReply,
   parseIncrementalReviseOutput,
 } from "./incrementalReviseOutput";
+import { summarizeRevisionChanges } from "./incrementalReviseSummary";
 import { formatAgentKnowledgeContext, ensureKnowledgeCitations } from "../knowledge";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { appendSkillSection } from "../skills/appendSkillSection";
@@ -54,7 +56,8 @@ export class IncrementalReviseWorkflow implements IAutonomousAgent {
 - **必须落实用户修订**：用户明确要求改日程/加景点/改节奏时，在 tripPlanMarkdown 中写入更新后的按天安排；不要只解释「为何不宜改」或只给可选建议而不改正文。
 - 若用户要求与 Skill 中的 pace/浪漫原则冲突，以**本轮用户明确要求**为准，并在 tripPlanMarkdown 的 ## 行程总览 用 1 句说明取舍。
 - tripPlanMarkdown 须为**更新后的完整 Markdown 行程**（含 ## 行程总览、## 日程建议（按天） 及原文已有的其他 ## 章节，结构与原文一致）；仅修改用户提到的部分。
-- chatReply 须为**面向用户的简短回复**（约 2～6 句）：说明本次改了什么、涉及哪一天/哪些活动；**不要**在 chatReply 中粘贴完整多日行程或大量 ## 章节。
+- chatReply 须为**面向用户的简短回复**（约 2～6 句）：**必须列出具体修改点**（哪一天、增删/调整了哪些景点或活动、节奏/预算变化）；禁止只说「已更新」「已同步至右侧」而不说明改了什么。
+- 示例 chatReply：「已在 Day1 下午加入老门东，中山陵改为上午；晚餐改在夫子庙附近。完整按天安排见右侧方案。」
 - 若【RAG 知识片段】非空且 chatReply 引用了其中事实，句末须保留 [来源: 文档标题 · 引用位置]。
 - 必须遵守【长期记忆】中的用户偏好和约束；若引用【RAG 知识片段】，句末保留 [来源: …] 标记。
 - **不要**编造新的实时天气/路线 API 数据；可沿用原方案中的工具结论或标注「沿用上一版查询结果」。
@@ -93,9 +96,50 @@ ${input.goal.rawText}`;
       throw e;
     }
 
-    const parsed =
-      parseIncrementalReviseOutput(raw) ??
-      fallbackIncrementalReviseOutput(raw, input.goal.rawText);
+    let parsed = parseIncrementalReviseOutput(raw);
+    let usedFallback = false;
+    if (!parsed) {
+      try {
+        const retryRaw = (
+          await this.llm.complete(
+            [
+              {
+                role: "system",
+                content: `${system}\n\n上次未输出合法 JSON。请仅输出 {"chatReply":"...","tripPlanMarkdown":"..."}，不要其他文字。`,
+              },
+              { role: "user", content: user },
+            ],
+            { temperature: 0.15, requestLabel: "incremental_revise_retry_json" }
+          )
+        ).trim();
+        parsed = parseIncrementalReviseOutput(retryRaw);
+        if (!parsed) {
+          parsed = fallbackIncrementalReviseOutput(retryRaw, input.goal.rawText);
+          usedFallback = Boolean(parsed);
+        }
+        if (!parsed) {
+          parsed = fallbackIncrementalReviseOutput(raw, input.goal.rawText);
+          usedFallback = Boolean(parsed);
+        }
+      } catch {
+        parsed = fallbackIncrementalReviseOutput(raw, input.goal.rawText);
+        usedFallback = Boolean(parsed);
+      }
+    }
+
+    if (
+      parsed &&
+      (usedFallback || isGenericIncrementalChatReply(parsed.chatReply))
+    ) {
+      parsed = {
+        ...parsed,
+        chatReply: await summarizeRevisionChanges(this.llm, {
+          userRequest: input.goal.rawText,
+          previousPlan: tripPlan,
+          revisedPlan: parsed.tripPlanMarkdown,
+        }),
+      };
+    }
 
     if (!parsed) {
       const err = emitter.emit({

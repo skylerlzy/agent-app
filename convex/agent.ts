@@ -24,6 +24,7 @@ import type {
   UserMemory,
   UserGoal,
 } from "../lib/agent/contracts";
+import type { RetrievalMode } from "../lib/agent/knowledge";
 import { buildAgentRunInput } from "../lib/agent/conversation/ConversationContextBuilder";
 import { ContextEngine } from "../lib/agent/context/ContextEngine";
 import { appendSkillSection } from "../lib/agent/skills/appendSkillSection";
@@ -37,9 +38,13 @@ import {
 import {
   buildRagQuery,
   inferKnowledgeCityFromText,
-  shouldRetrieveKnowledge,
-  skipRagReason,
+  attachBuiltinEmbeddings,
+  embedQuery,
+  hybridRankKnowledgeChunks,
+  scopeCandidatesToQueryCity,
 } from "../lib/agent/knowledge";
+import { decideRagRetrieval } from "../lib/agent/intent/LLMRagRouter";
+import { extractMemoryCandidatesWithLLM } from "../lib/agent/knowledge/extractMemoriesLLM";
 import { SessionEmitter } from "../lib/agent/runtime/SessionEmitter";
 import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/SkillRegistry";
 import { inferCityFromText } from "../lib/agent/tools/ToolArgumentValidator";
@@ -172,8 +177,19 @@ async function enrichInputWithKnowledge(
   userId: string,
   userMessage: string,
   preferences: TripPreferences,
-  runMode: AgentRunMode
-): Promise<AgentRunInput> {
+  runMode: AgentRunMode,
+  llm: OpenAICompatibleClient,
+  hasExistingPlan: boolean
+): Promise<{
+  input: AgentRunInput;
+  ragMeta: {
+    query: string;
+    chunks: KnowledgeChunk[];
+    mode: RetrievalMode;
+    skipped?: boolean;
+    reason?: string;
+  };
+}> {
   const goalPreview = mergeGoalFromPreferences(userMessage, preferences);
   const ragCity =
     goalPreview.slots?.destination ??
@@ -182,37 +198,73 @@ async function enrichInputWithKnowledge(
     inferCityFromText(userMessage)?.replace(/市$/u, "") ??
     undefined;
 
-  if (!shouldRetrieveKnowledge({ goalText: userMessage, runMode })) {
-    return {
-      ...input,
-      contextBundle: {
-        ...input.contextBundle,
-        longTermMemories: input.contextBundle?.longTermMemories ?? [],
-        ragChunks: [],
-      },
-    };
-  }
-
   const ragQuery = buildRagQuery({
     userMessage,
     destination: goalPreview.slots?.destination,
     additionalNotes: preferences.additionalNotes,
   });
 
-  const ragChunks: KnowledgeChunk[] = await ctx.runQuery(internal.knowledge.retrieveInternal, {
-    userId,
-    query: ragQuery,
-    topK: 5,
-    filters: ragCity ? { city: ragCity } : undefined,
+  const ragDecision = await decideRagRetrieval(llm, {
+    goalText: userMessage,
+    runMode,
+    hasExistingPlan,
+    history: input.history,
   });
 
+  if (!ragDecision.shouldRetrieve) {
+    return {
+      input: {
+        ...input,
+        contextBundle: {
+          ...input.contextBundle,
+          longTermMemories: input.contextBundle?.longTermMemories ?? [],
+          ragChunks: [],
+        },
+      },
+      ragMeta: {
+        query: ragQuery,
+        chunks: [],
+        mode: "keyword",
+        skipped: true,
+        reason: ragDecision.reason,
+      },
+    };
+  }
+
+  const queryEmbedding = await embedQuery(ragQuery);
+
+  const userCandidates = await ctx.runQuery(internal.knowledge.listCandidatesInternal, {
+    userId,
+    city: ragCity,
+  });
+
+  let candidates = await attachBuiltinEmbeddings(userCandidates, { city: ragCity });
+  candidates = scopeCandidatesToQueryCity(ragQuery, candidates);
+
+  if (!candidates.length && ragCity) {
+    candidates = scopeCandidatesToQueryCity(
+      ragQuery,
+      await attachBuiltinEmbeddings(userCandidates, { city: ragCity })
+    );
+  }
+
+  const { chunks: ragChunks, mode } = hybridRankKnowledgeChunks(
+    ragQuery,
+    candidates,
+    5,
+    queryEmbedding
+  );
+
   return {
-    ...input,
-    contextBundle: {
-      ...input.contextBundle,
-      longTermMemories: input.contextBundle?.longTermMemories ?? [],
-      ragChunks,
+    input: {
+      ...input,
+      contextBundle: {
+        ...input.contextBundle,
+        longTermMemories: input.contextBundle?.longTermMemories ?? [],
+        ragChunks,
+      },
     },
+    ragMeta: { query: ragQuery, chunks: ragChunks, mode, reason: ragDecision.reason },
   };
 }
 
@@ -224,6 +276,7 @@ async function emitKnowledgeRetrievalTrace(
     chunks: KnowledgeChunk[];
     skipped?: boolean;
     reason?: string;
+    retrievalMode?: RetrievalMode;
   }
 ): Promise<void> {
   const emitter = new SessionEmitter(sessionId);
@@ -233,6 +286,12 @@ async function emitKnowledgeRetrievalTrace(
       query: input.query,
       chunkCount: input.chunks.length,
       documentTitles: [...new Set(input.chunks.map((c) => c.documentTitle))],
+      topScores: input.chunks.slice(0, 3).map((c) => ({
+        title: c.documentTitle,
+        citation: c.citation,
+        score: c.score,
+      })),
+      ...(input.retrievalMode ? { retrievalMode: input.retrievalMode } : {}),
       ...(input.skipped ? { skipped: true, reason: input.reason } : {}),
     },
   });
@@ -471,9 +530,11 @@ async function runAgentInConversationHandler(
     }
   }
 
+  const llmClient = new OpenAICompatibleClient();
+
   const modeDecision = args.runMode
     ? { mode: args.runMode, source: "override" as const }
-    : await createRunModeRouter({ llm: new OpenAICompatibleClient() }).decide({
+    : await createRunModeRouter({ llm: llmClient }).decide({
         goalText: userMessageRow.content,
         history: input.history ?? [],
         hasExistingPlan: Boolean(tripPlan),
@@ -499,33 +560,30 @@ async function runAgentInConversationHandler(
     },
   };
 
-  input = await enrichInputWithKnowledge(
+  const knowledgeEnriched = await enrichInputWithKnowledge(
     ctx,
     input,
     userId,
     userMessageRow.content,
     args.preferences ?? {},
-    resolvedMode
+    resolvedMode,
+    llmClient,
+    Boolean(tripPlan)
   );
+  input = knowledgeEnriched.input;
 
-  const ragQuery = buildRagQuery({
-    userMessage: userMessageRow.content,
-    destination: mergeGoalFromPreferences(userMessageRow.content, args.preferences ?? {}).slots
-      ?.destination,
-    additionalNotes: args.preferences?.additionalNotes,
-  });
-
-  if (shouldRetrieveKnowledge({ goalText: userMessageRow.content, runMode: resolvedMode })) {
+  if (knowledgeEnriched.ragMeta.skipped) {
     await emitKnowledgeRetrievalTrace(traceSink, args.sessionId, {
-      query: ragQuery,
-      chunks: input.contextBundle?.ragChunks ?? [],
+      query: knowledgeEnriched.ragMeta.query,
+      chunks: [],
+      skipped: true,
+      reason: knowledgeEnriched.ragMeta.reason ?? "LLM 判定无需检索",
     });
   } else {
     await emitKnowledgeRetrievalTrace(traceSink, args.sessionId, {
-      query: ragQuery,
-      chunks: [],
-      skipped: true,
-      reason: skipRagReason(userMessageRow.content, resolvedMode),
+      query: knowledgeEnriched.ragMeta.query,
+      chunks: knowledgeEnriched.ragMeta.chunks,
+      retrievalMode: knowledgeEnriched.ragMeta.mode,
     });
   }
 
@@ -581,12 +639,17 @@ async function runAgentInConversationHandler(
       });
     }
 
-    await ctx.runMutation(internal.memories.extractFromTurnInternal, {
-      userId,
-      conversationId: args.conversationId,
+    const memoryCandidates = await extractMemoryCandidatesWithLLM(llmClient, {
       userMessage: userMessageRow.content,
       assistantReply: summary,
     });
+    if (memoryCandidates.length) {
+      await ctx.runMutation(internal.memories.saveCandidatesInternal, {
+        userId,
+        conversationId: args.conversationId,
+        candidates: memoryCandidates,
+      });
+    }
   }
 
   return { sessionId: args.sessionId };

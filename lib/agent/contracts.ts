@@ -184,7 +184,7 @@ export type ReasoningEvent =
       type: "run_mode";
       payload: {
         mode: AgentRunMode;
-        source?: "llm" | "heuristic" | "override";
+        source?: "llm" | "heuristic" | "override" | "fallback";
         reason?: string;
         confidence?: number;
       };
@@ -231,6 +231,8 @@ export type ReasoningEvent =
         query: string;
         chunkCount: number;
         documentTitles: string[];
+        retrievalMode?: "keyword" | "hybrid";
+        topScores?: Array<{ title: string; citation: string; score: number }>;
         skipped?: boolean;
         reason?: string;
       };
@@ -244,7 +246,7 @@ export type ReasoningEvent =
 export interface AgentSkill {
   id: string;
   userId: string;
-  /** 目录名，如 high-speed-rail-transfer */
+  /** 目录名，如 couple-romantic-travel */
   name: string;
   description: string;
   markdownBody: string;
@@ -369,7 +371,7 @@ export interface IRunModeRouter {
     planSummaryHint?: string;
   }): Promise<{
     mode: AgentRunMode;
-    source: "llm" | "heuristic" | "override";
+    source: "llm" | "heuristic" | "override" | "fallback";
     reason?: string;
     confidence?: number;
   }>;
@@ -394,7 +396,7 @@ export interface AgentRunInput {
   runMode?: AgentRunMode;
   /** 路由决策元数据（LLM/规则依据），写入 trace run_mode 事件 */
   runModeMeta?: {
-    source: "llm" | "heuristic" | "override";
+    source: "llm" | "heuristic" | "override" | "fallback";
     reason?: string;
     confidence?: number;
   };

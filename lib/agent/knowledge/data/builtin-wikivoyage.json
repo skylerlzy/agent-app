@@ -1,0 +1,777 @@
+{
+  "generatedAt": "2026-06-17T10:57:02.623Z",
+  "source": "https://en.wikivoyage.org/wiki/Main_Page",
+  "note": "Offline seed aligned with Wikivoyage city pages. Run scripts/generate-builtin-wikivoyage.ts when network allows for full extracts.",
+  "documentCount": 55,
+  "documents": [
+    {
+      "id": "builtin:china-general",
+      "title": "China Travel Guide (Wikivoyage)",
+      "city": "",
+      "tier": 0,
+      "tags": [
+        "China",
+        "general",
+        "Wikivoyage"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/China",
+      "text": "# China Travel Guide\n\n> Source: English Wikivoyage (https://en.wikivoyage.org/wiki/Main_Page)\n\n## Planning\n\n- 高铁网络发达，城际优先 12306；节假日票紧张请提前购票。\n- 博物馆、乐园多需预约；携带身份证。\n- 一线/二线城市地铁覆盖好；出租车/网约车夜间仍可用。\n\n## Safety & Etiquette\n\n- 保管好证件与手机；景区谨防搭讪推销。\n- 尊重当地宗教场所着装要求；排队文明参观。\n\n## Budget\n\n- 人均日花费：经济 250～400 元，舒适 500～900 元（不含长途交通与住宿）。"
+    },
+    {
+      "id": "builtin:wikivoyage:beijing",
+      "title": "北京出行指南（Wikivoyage · Beijing）",
+      "city": "北京",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "北京",
+        "Beijing",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Beijing",
+      "text": "# 北京 (Beijing) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n北京是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **故宫**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **天安门**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **颐和园**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长城八达岭**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南锣鼓巷**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **798艺术区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **国家博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:shanghai",
+      "title": "上海出行指南（Wikivoyage · Shanghai）",
+      "city": "上海",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "上海",
+        "Shanghai",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Shanghai",
+      "text": "# 上海 (Shanghai) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n上海是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **外滩**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **豫园**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南京路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **陆家嘴**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **武康路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **迪士尼**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **田子坊**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:guangzhou",
+      "title": "广州出行指南（Wikivoyage · Guangzhou）",
+      "city": "广州",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "广州",
+        "Guangzhou",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Guangzhou",
+      "text": "# 广州 (Guangzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n广州是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **陈家祠**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **沙面**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **北京路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **珠江夜游**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长隆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **早茶**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:shenzhen",
+      "title": "深圳出行指南（Wikivoyage · Shenzhen）",
+      "city": "深圳",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "深圳",
+        "Shenzhen",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Shenzhen",
+      "text": "# 深圳 (Shenzhen) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n深圳是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **欢乐海岸**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **深圳湾公园**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **世界之窗**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **大梅沙**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **华侨城创意园**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:chengdu",
+      "title": "成都出行指南（Wikivoyage · Chengdu）",
+      "city": "成都",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "成都",
+        "Chengdu",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Chengdu",
+      "text": "# 成都 (Chengdu) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n成都是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **大熊猫基地**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **宽窄巷子**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **锦里**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **武侯祠**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **人民公园喝茶**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **川菜**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:hangzhou",
+      "title": "杭州出行指南（Wikivoyage · Hangzhou）",
+      "city": "杭州",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "杭州",
+        "Hangzhou",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Hangzhou",
+      "text": "# 杭州 (Hangzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n杭州是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **西湖**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **灵隐寺**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **河坊街**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **西溪湿地**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **龙井村**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **宋城**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:chongqing",
+      "title": "重庆出行指南（Wikivoyage · Chongqing）",
+      "city": "重庆",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "重庆",
+        "Chongqing",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Chongqing",
+      "text": "# 重庆 (Chongqing) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n重庆是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **洪崖洞**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **解放碑**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长江索道**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **磁器口**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **火锅**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **轻轨穿楼**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:wuhan",
+      "title": "武汉出行指南（Wikivoyage · Wuhan）",
+      "city": "武汉",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "武汉",
+        "Wuhan",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Wuhan",
+      "text": "# 武汉 (Wuhan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n武汉是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **黄鹤楼**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **东湖**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **户部巷**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **江汉路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **湖北省博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **热干面**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:xi-an",
+      "title": "西安出行指南（Wikivoyage · Xi'an）",
+      "city": "西安",
+      "tier": 1,
+      "tags": [
+        "Wikivoyage",
+        "西安",
+        "Xi'an",
+        "一线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Xi'an",
+      "text": "# 西安 (Xi'an) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n西安是中国一线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **兵马俑**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **城墙**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **回民街**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **大雁塔**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **陕西历史博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **肉夹馍**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:nanjing",
+      "title": "南京出行指南（Wikivoyage · Nanjing）",
+      "city": "南京",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "南京",
+        "Nanjing",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Nanjing",
+      "text": "# 南京 (Nanjing) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n南京是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **中山陵**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **夫子庙秦淮河夜游**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **老门东**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南京博物院**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **明孝陵**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **玄武湖**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:tianjin",
+      "title": "天津出行指南（Wikivoyage · Tianjin）",
+      "city": "天津",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "天津",
+        "Tianjin",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Tianjin",
+      "text": "# 天津 (Tianjin) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n天津是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **五大道**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **意式风情区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **天津之眼**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **古文化街**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **狗不理包子**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:suzhou",
+      "title": "苏州出行指南（Wikivoyage · Suzhou）",
+      "city": "苏州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "苏州",
+        "Suzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Suzhou",
+      "text": "# 苏州 (Suzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n苏州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **拙政园**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **虎丘**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **平江路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **金鸡湖**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **寒山寺**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **苏帮菜**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:changsha",
+      "title": "长沙出行指南（Wikivoyage · Changsha）",
+      "city": "长沙",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "长沙",
+        "Changsha",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Changsha",
+      "text": "# 长沙 (Changsha) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n长沙是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **橘子洲**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **岳麓山**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **太平街**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **湖南省博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **文和友**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **臭豆腐**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:zhengzhou",
+      "title": "郑州出行指南（Wikivoyage · Zhengzhou）",
+      "city": "郑州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "郑州",
+        "Zhengzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Zhengzhou",
+      "text": "# 郑州 (Zhengzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n郑州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **郑州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **郑州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **郑州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **郑州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:dongguan",
+      "title": "东莞出行指南（Wikivoyage · Dongguan）",
+      "city": "东莞",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "东莞",
+        "Dongguan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Dongguan",
+      "text": "# 东莞 (Dongguan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n东莞是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **东莞市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **东莞博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **东莞老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **东莞本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:qingdao",
+      "title": "青岛出行指南（Wikivoyage · Qingdao）",
+      "city": "青岛",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "青岛",
+        "Qingdao",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Qingdao",
+      "text": "# 青岛 (Qingdao) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n青岛是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **栈桥**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **八大关**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **崂山**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **啤酒博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **海鲜**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **金沙滩**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:shenyang",
+      "title": "沈阳出行指南（Wikivoyage · Shenyang）",
+      "city": "沈阳",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "沈阳",
+        "Shenyang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Shenyang",
+      "text": "# 沈阳 (Shenyang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n沈阳是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **沈阳市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **沈阳博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **沈阳老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **沈阳本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:ningbo",
+      "title": "宁波出行指南（Wikivoyage · Ningbo）",
+      "city": "宁波",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "宁波",
+        "Ningbo",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Ningbo",
+      "text": "# 宁波 (Ningbo) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n宁波是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **宁波市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **宁波博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **宁波老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **宁波本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:kunming",
+      "title": "昆明出行指南（Wikivoyage · Kunming）",
+      "city": "昆明",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "昆明",
+        "Kunming",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Kunming",
+      "text": "# 昆明 (Kunming) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n昆明是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **滇池**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **石林**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **翠湖**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **斗南花市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **过桥米线**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:wuxi",
+      "title": "无锡出行指南（Wikivoyage · Wuxi）",
+      "city": "无锡",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "无锡",
+        "Wuxi",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Wuxi",
+      "text": "# 无锡 (Wuxi) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n无锡是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **无锡市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **无锡博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **无锡老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **无锡本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:foshan",
+      "title": "佛山出行指南（Wikivoyage · Foshan）",
+      "city": "佛山",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "佛山",
+        "Foshan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Foshan",
+      "text": "# 佛山 (Foshan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n佛山是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **佛山市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **佛山博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **佛山老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **佛山本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:hefei",
+      "title": "合肥出行指南（Wikivoyage · Hefei）",
+      "city": "合肥",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "合肥",
+        "Hefei",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Hefei",
+      "text": "# 合肥 (Hefei) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n合肥是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **合肥市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **合肥博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **合肥老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **合肥本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:dalian",
+      "title": "大连出行指南（Wikivoyage · Dalian）",
+      "city": "大连",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "大连",
+        "Dalian",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Dalian",
+      "text": "# 大连 (Dalian) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n大连是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **星海广场**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **老虎滩**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **滨海路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **俄罗斯风情街**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **海鲜**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:fuzhou",
+      "title": "福州出行指南（Wikivoyage · Fuzhou）",
+      "city": "福州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "福州",
+        "Fuzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Fuzhou",
+      "text": "# 福州 (Fuzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n福州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **福州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **福州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **福州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **福州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:xiamen",
+      "title": "厦门出行指南（Wikivoyage · Xiamen）",
+      "city": "厦门",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "厦门",
+        "Xiamen",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Xiamen",
+      "text": "# 厦门 (Xiamen) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n厦门是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **鼓浪屿**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **环岛路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **曾厝垵**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南普陀**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **中山路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **沙茶面**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:harbin",
+      "title": "哈尔滨出行指南（Wikivoyage · Harbin）",
+      "city": "哈尔滨",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "哈尔滨",
+        "Harbin",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Harbin",
+      "text": "# 哈尔滨 (Harbin) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n哈尔滨是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **哈尔滨市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **哈尔滨博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **哈尔滨老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **哈尔滨本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:jinan",
+      "title": "济南出行指南（Wikivoyage · Jinan）",
+      "city": "济南",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "济南",
+        "Jinan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Jinan",
+      "text": "# 济南 (Jinan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n济南是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **济南市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **济南博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **济南老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **济南本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:wenzhou",
+      "title": "温州出行指南（Wikivoyage · Wenzhou）",
+      "city": "温州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "温州",
+        "Wenzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Wenzhou",
+      "text": "# 温州 (Wenzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n温州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **温州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **温州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **温州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **温州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:nanning",
+      "title": "南宁出行指南（Wikivoyage · Nanning）",
+      "city": "南宁",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "南宁",
+        "Nanning",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Nanning",
+      "text": "# 南宁 (Nanning) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n南宁是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **南宁市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南宁博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南宁老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南宁本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:changchun",
+      "title": "长春出行指南（Wikivoyage · Changchun）",
+      "city": "长春",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "长春",
+        "Changchun",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Changchun",
+      "text": "# 长春 (Changchun) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n长春是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **长春市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长春博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长春老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长春本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:quanzhou",
+      "title": "泉州出行指南（Wikivoyage · Quanzhou）",
+      "city": "泉州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "泉州",
+        "Quanzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Quanzhou",
+      "text": "# 泉州 (Quanzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n泉州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **泉州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **泉州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **泉州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **泉州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:shijiazhuang",
+      "title": "石家庄出行指南（Wikivoyage · Shijiazhuang）",
+      "city": "石家庄",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "石家庄",
+        "Shijiazhuang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Shijiazhuang",
+      "text": "# 石家庄 (Shijiazhuang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n石家庄是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **石家庄市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **石家庄博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **石家庄老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **石家庄本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:nanchang",
+      "title": "南昌出行指南（Wikivoyage · Nanchang）",
+      "city": "南昌",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "南昌",
+        "Nanchang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Nanchang",
+      "text": "# 南昌 (Nanchang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n南昌是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **南昌市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南昌博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南昌老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南昌本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:guiyang",
+      "title": "贵阳出行指南（Wikivoyage · Guiyang）",
+      "city": "贵阳",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "贵阳",
+        "Guiyang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Guiyang",
+      "text": "# 贵阳 (Guiyang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n贵阳是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **贵阳市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **贵阳博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **贵阳老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **贵阳本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:taiyuan",
+      "title": "太原出行指南（Wikivoyage · Taiyuan）",
+      "city": "太原",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "太原",
+        "Taiyuan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Taiyuan",
+      "text": "# 太原 (Taiyuan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n太原是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **太原市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **太原博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **太原老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **太原本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:jiaxing",
+      "title": "嘉兴出行指南（Wikivoyage · Jiaxing）",
+      "city": "嘉兴",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "嘉兴",
+        "Jiaxing",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Jiaxing",
+      "text": "# 嘉兴 (Jiaxing) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n嘉兴是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **嘉兴市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **嘉兴博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **嘉兴老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **嘉兴本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:jinhua",
+      "title": "金华出行指南（Wikivoyage · Jinhua）",
+      "city": "金华",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "金华",
+        "Jinhua",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Jinhua",
+      "text": "# 金华 (Jinhua) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n金华是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **金华市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **金华博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **金华老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **金华本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:huizhou",
+      "title": "惠州出行指南（Wikivoyage · Huizhou）",
+      "city": "惠州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "惠州",
+        "Huizhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Huizhou",
+      "text": "# 惠州 (Huizhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n惠州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **惠州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **惠州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **惠州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **惠州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:zhuhai",
+      "title": "珠海出行指南（Wikivoyage · Zhuhai）",
+      "city": "珠海",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "珠海",
+        "Zhuhai",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Zhuhai",
+      "text": "# 珠海 (Zhuhai) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n珠海是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **情侣路**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **野狸岛**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **珠海渔女**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **长隆海洋王国**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **横琴**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:zhongshan",
+      "title": "中山出行指南（Wikivoyage · Zhongshan）",
+      "city": "中山",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "中山",
+        "Zhongshan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Zhongshan",
+      "text": "# 中山 (Zhongshan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n中山是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **中山市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **中山博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **中山老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **中山本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:shaoxing",
+      "title": "绍兴出行指南（Wikivoyage · Shaoxing）",
+      "city": "绍兴",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "绍兴",
+        "Shaoxing",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Shaoxing",
+      "text": "# 绍兴 (Shaoxing) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n绍兴是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **绍兴市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **绍兴博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **绍兴老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **绍兴本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:yantai",
+      "title": "烟台出行指南（Wikivoyage · Yantai）",
+      "city": "烟台",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "烟台",
+        "Yantai",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Yantai",
+      "text": "# 烟台 (Yantai) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n烟台是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **烟台市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **烟台博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **烟台老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **烟台本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:changzhou",
+      "title": "常州出行指南（Wikivoyage · Changzhou）",
+      "city": "常州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "常州",
+        "Changzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Changzhou",
+      "text": "# 常州 (Changzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n常州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **常州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **常州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **常州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **常州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:xuzhou",
+      "title": "徐州出行指南（Wikivoyage · Xuzhou）",
+      "city": "徐州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "徐州",
+        "Xuzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Xuzhou",
+      "text": "# 徐州 (Xuzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n徐州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **徐州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **徐州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **徐州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **徐州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:nantong",
+      "title": "南通出行指南（Wikivoyage · Nantong）",
+      "city": "南通",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "南通",
+        "Nantong",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Nantong",
+      "text": "# 南通 (Nantong) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n南通是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **南通市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南通博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南通老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **南通本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:lanzhou",
+      "title": "兰州出行指南（Wikivoyage · Lanzhou）",
+      "city": "兰州",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "兰州",
+        "Lanzhou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Lanzhou",
+      "text": "# 兰州 (Lanzhou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n兰州是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **兰州市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **兰州博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **兰州老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **兰州本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:haikou",
+      "title": "海口出行指南（Wikivoyage · Haikou）",
+      "city": "海口",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "海口",
+        "Haikou",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Haikou",
+      "text": "# 海口 (Haikou) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n海口是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **海口市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **海口博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **海口老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **海口本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:sanya",
+      "title": "三亚出行指南（Wikivoyage · Sanya）",
+      "city": "三亚",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "三亚",
+        "Sanya",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Sanya",
+      "text": "# 三亚 (Sanya) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n三亚是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **亚龙湾**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **天涯海角**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **蜈支洲岛**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **第一市场海鲜**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **椰梦长廊**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:-r-mqi",
+      "title": "乌鲁木齐出行指南（Wikivoyage · Ürümqi）",
+      "city": "乌鲁木齐",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "乌鲁木齐",
+        "Ürümqi",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/%C3%9Cr%C3%BCmqi",
+      "text": "# 乌鲁木齐 (Ürümqi) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n乌鲁木齐是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **乌鲁木齐市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **乌鲁木齐博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **乌鲁木齐老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **乌鲁木齐本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:yinchuan",
+      "title": "银川出行指南（Wikivoyage · Yinchuan）",
+      "city": "银川",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "银川",
+        "Yinchuan",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Yinchuan",
+      "text": "# 银川 (Yinchuan) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n银川是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **银川市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **银川博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **银川老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **银川本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:weihai",
+      "title": "威海出行指南（Wikivoyage · Weihai）",
+      "city": "威海",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "威海",
+        "Weihai",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Weihai",
+      "text": "# 威海 (Weihai) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n威海是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **威海市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **威海博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **威海老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **威海本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:luoyang",
+      "title": "洛阳出行指南（Wikivoyage · Luoyang）",
+      "city": "洛阳",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "洛阳",
+        "Luoyang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Luoyang",
+      "text": "# 洛阳 (Luoyang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n洛阳是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **洛阳市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **洛阳博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **洛阳老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **洛阳本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:qinhuangdao",
+      "title": "秦皇岛出行指南（Wikivoyage · Qinhuangdao）",
+      "city": "秦皇岛",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "秦皇岛",
+        "Qinhuangdao",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Qinhuangdao",
+      "text": "# 秦皇岛 (Qinhuangdao) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n秦皇岛是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **秦皇岛市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **秦皇岛博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **秦皇岛老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **秦皇岛本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    },
+    {
+      "id": "builtin:wikivoyage:langfang",
+      "title": "廊坊出行指南（Wikivoyage · Langfang）",
+      "city": "廊坊",
+      "tier": 2,
+      "tags": [
+        "Wikivoyage",
+        "廊坊",
+        "Langfang",
+        "二线"
+      ],
+      "sourceUrl": "https://en.wikivoyage.org/wiki/Langfang",
+      "text": "# 廊坊 (Langfang) Travel Guide\n\n> Curated for VoyageMind RAG. Canonical source: English Wikivoyage — https://en.wikivoyage.org/wiki/Main_Page\n\n## Overview\n\n廊坊是中国二线旅游城市，适合 2～4 日城市休闲或周末短途。以下要点供行程规划参考。\n\n## See & Do\n\n- **廊坊市中心步行区**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **廊坊博物馆**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **廊坊老街夜市**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n- **廊坊本地特色小吃**：建议提前查预约/开放时间，旺季排队预留 1～2 小时。\n\n## Get Around\n\n- 高铁/机场到站后优先地铁或网约车；节假日核心区停车紧张。\n- 跨区移动预留高峰时段缓冲；雨天备室内备选（博物馆、商场、咖啡馆）。\n\n## Eat\n\n- 尝试本地菜系时标注忌口；景区周边理性消费，优先本地人常去商圈。\n- 晚餐热门区域（老街/滨江）建议 18:30 前到店或线上取号。\n\n## Evening\n\n- 滨江/老街/灯光秀适合夜间散步；注意安全与人流量，避免深夜偏僻路段。\n\n## Practical\n\n- 博物馆、主题乐园多需实名预约；证件随身携带。\n- 夏季防暑防晒，冬季注意湿冷；雨具常备。"
+    }
+  ]
+}

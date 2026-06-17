@@ -16,8 +16,12 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   const pathname = request.nextUrl.pathname;
 
-  // Next 静态资源与 Clerk 内部请求必须直通，避免误触发 auth 导致 chunk/css 404 或 ERR_ABORTED
-  if (pathname.startsWith("/_next/") || pathname.startsWith("/__clerk")) {
+  // 静态景观图（public/landing）与 Next 内部资源必须直通
+  if (
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/__clerk") ||
+    pathname.startsWith("/landing/")
+  ) {
     return NextResponse.next();
   }
 

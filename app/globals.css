@@ -4,18 +4,18 @@
 
 @layer base {
   :root {
-    /* 淡青主调：清透、有生机、不刺眼，偏高雅 */
+    /* 淡青主调：清透、有生机；辅以 sky / amber 点缀 */
     --background: 168 32% 96%;
     --foreground: 196 28% 22%;
     --card: 165 28% 99%;
     --card-foreground: 196 26% 20%;
-    --primary: 168 30% 38%;
+    --primary: 168 32% 36%;
     --primary-foreground: 165 20% 98%;
-    --secondary: 165 22% 93%;
+    --secondary: 172 24% 92%;
     --secondary-foreground: 196 22% 28%;
     --muted: 165 18% 92%;
     --muted-foreground: 196 14% 40%;
-    --accent: 172 24% 90%;
+    --accent: 199 32% 90%;
     --accent-foreground: 196 26% 24%;
     --border: 165 16% 86%;
     --input: 165 14% 90%;
@@ -23,6 +23,9 @@
     --destructive: 0 65% 48%;
     --destructive-foreground: 0 0% 100%;
     --radius: 0.875rem;
+    --voyage-sky: 199 76% 48%;
+    --voyage-amber: 38 92% 50%;
+    --voyage-teal: 172 45% 38%;
   }
 
   * {

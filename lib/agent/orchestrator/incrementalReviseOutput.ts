@@ -25,6 +25,16 @@ export function parseIncrementalReviseOutput(raw: string): IncrementalReviseOutp
   }
 }
 
+export function isGenericIncrementalChatReply(chatReply: string): boolean {
+  const t = chatReply.trim();
+  if (!t) return true;
+  if (/已根据您的要求更新|已按您的要求|完整修订版行程已同步至右侧|已同步至右侧「全程出行方案」|请打开「全程出行方案」查看/.test(t)) {
+    return true;
+  }
+  if (t.length < 20 && /已更新|已同步/.test(t)) return true;
+  return false;
+}
+
 /** LLM 未按 JSON 输出时的降级：整段视为行程，对话框给简短提示 */
 export function fallbackIncrementalReviseOutput(
   raw: string,
@@ -32,10 +42,8 @@ export function fallbackIncrementalReviseOutput(
 ): IncrementalReviseOutput | null {
   const t = raw.trim();
   if (!looksLikeFullItinerary(t)) return null;
-  const dayHint =
-    userRequest.match(/第\s*[一二三四五六七八九十\d]+\s*天|day\s*\d+/i)?.[0] ?? "相关日期";
   return {
-    chatReply: `已根据您的要求更新 **${dayHint}** 的安排，完整修订版行程已同步至右侧「全程出行方案」。如需继续微调，直接说明即可。`,
+    chatReply: `已按您的要求「${userRequest.trim().slice(0, 48)}」更新右侧全程方案。请打开「全程出行方案」查看按天变动；如需我把某一天的改动展开说明，请直接说。`,
     tripPlanMarkdown: t,
   };
 }

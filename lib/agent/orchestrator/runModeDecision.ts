@@ -1,6 +1,8 @@
 import type { AgentRunMode } from "../contracts";
 
-export type RunModeRouterSource = "llm" | "heuristic" | "override";
+export type RunModeRouterSource = "llm" | "heuristic" | "override" | "fallback";
+
+export type RunModeMetaSource = RunModeRouterSource;
 
 export interface RunModeMeta {
   source: RunModeRouterSource;

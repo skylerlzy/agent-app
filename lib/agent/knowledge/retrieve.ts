@@ -10,6 +10,8 @@ export interface ScoredChunkCandidate {
   citation: string;
   tags?: string[];
   city?: string;
+  /** 向量检索用；用户分块存于 Convex，内置分块由 action 缓存 */
+  embedding?: number[];
 }
 
 function normalize(input: string): string {
@@ -24,16 +26,24 @@ function extractTerms(query: string): string[] {
   const normalized = normalize(query);
   const terms = new Set<string>();
 
-  for (const word of normalized.split(/\s+/).filter(Boolean)) {
-    if (word.length >= 2) terms.add(word);
-    if (/[\u4e00-\u9fa5]{3,}/.test(word)) {
-      for (let i = 0; i < word.length - 1; i += 1) {
-        terms.add(word.slice(i, i + 2));
-      }
+  const cjkRuns = normalized.match(/[\u4e00-\u9fa5]{2,}/g) ?? [];
+  for (const run of cjkRuns) {
+    if (run.length <= 4) {
+      terms.add(run);
+    }
+    for (let i = 0; i < run.length - 1; i += 1) {
+      terms.add(run.slice(i, i + 2));
+    }
+    if (run.length >= 4) {
+      terms.add(run.slice(0, 4));
     }
   }
 
-  return [...terms].slice(0, 40);
+  for (const word of normalized.split(/\s+/).filter(Boolean)) {
+    if (word.length >= 2 && !/^[\u4e00-\u9fa5]+$/.test(word)) terms.add(word);
+  }
+
+  return [...terms].slice(0, 48);
 }
 
 export function scoreKnowledgeChunk(
@@ -55,12 +65,19 @@ export function scoreKnowledgeChunk(
   );
 
   let score = 0;
+  let hitCount = 0;
   for (const term of terms) {
     const firstHit = haystack.indexOf(term);
     if (firstHit < 0) continue;
-    score += term.length >= 4 ? 3 : 1;
-    if (firstHit < 240) score += 0.5;
+    hitCount += 1;
+    const weight = term.length >= 4 ? 3.5 : term.length === 3 ? 2 : 1;
+    score += weight;
+    if (firstHit < 180) score += 0.75;
+    if (candidate.documentTitle && normalize(candidate.documentTitle).includes(term)) {
+      score += 1.5;
+    }
   }
+  if (hitCount >= 3) score += hitCount * 0.4;
 
   const queryCity = opts?.queryCity ?? inferKnowledgeCityFromText(query);
   if (queryCity && candidate.city) {

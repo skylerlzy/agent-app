@@ -20,9 +20,7 @@ import { LightweightWorkflow } from "./LightweightWorkflow";
 import { MultiAgentCoordinator } from "./MultiAgentCoordinator";
 import { PlanExecuteOrchestrator } from "./PlanExecuteOrchestrator";
 import { RunModeRoutingAgent } from "./RunModeRoutingAgent";
-import { RunModeRouter } from "./RunModeRouter";
-import { HybridRunModeRouter } from "./HybridRunModeRouter";
-import { llmRunModeRouterEnabled } from "./runModeDecision";
+import { LLMRunModeRouter } from "./LLMRunModeRouter";
 
 export interface AutonomousAgentPipelineDeps {
   skillRegistry?: ISkillRegistry;
@@ -67,12 +65,8 @@ export function createAutonomousAgentPipeline(
   return new RunModeRoutingAgent(full, quick, incremental);
 }
 
-/** 默认 runMode 路由器：USE_LLM_RUN_MODE_ROUTER 开启时用 LLM 语义分类 + 规则回退 */
+/** 默认 runMode 路由器：LLM 语义理解（失败时保守回退） */
 export function createRunModeRouter(deps?: { llm?: ILLMClient }): IRunModeRouter {
-  const fallback = new RunModeRouter();
-  if (llmRunModeRouterEnabled()) {
-    const llm = deps?.llm ?? new OpenAICompatibleClient();
-    return new HybridRunModeRouter(llm, fallback);
-  }
-  return fallback;
+  const llm = deps?.llm ?? new OpenAICompatibleClient();
+  return new LLMRunModeRouter(llm);
 }

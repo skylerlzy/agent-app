@@ -81,6 +81,10 @@ const config: Config = {
           "0%, 100%": { transform: "scale(1)", opacity: "1" },
           "50%": { transform: "scale(1.05)", opacity: "0.88" },
         },
+        "marquee-left": {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
@@ -89,6 +93,10 @@ const config: Config = {
         "plane-sway": "plane-sway 3.2s ease-in-out infinite",
         "card-enter": "card-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both",
         "node-breathe": "node-breathe 2.4s ease-in-out infinite",
+        "marquee-left": "marquee-left 80s linear infinite",
+      },
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(circle, var(--tw-gradient-stops))",
       },
       transitionTimingFunction: {
         soft: "cubic-bezier(0.22, 1, 0.36, 1)",
