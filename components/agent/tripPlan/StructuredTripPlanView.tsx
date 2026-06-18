@@ -1,7 +1,12 @@
 "use client";
 
+import { FoodRecommendationCard } from "@/components/agent/tripPlan/FoodRecommendationCard";
 import { TripPlanMap } from "@/components/agent/tripPlan/TripPlanMap";
+import { TripPlanThemesSection } from "@/components/agent/tripPlan/TripPlanThemesSection";
+import { TripPlanTransportSection } from "@/components/agent/tripPlan/TripPlanTransportSection";
 import { TripPlanTimeline } from "@/components/agent/tripPlan/TripPlanTimeline";
+import { TripPlanWeatherSection } from "@/components/agent/tripPlan/TripPlanWeatherSection";
+import { stripPlaceholderText } from "@/lib/agent/tripPlan/displayText";
 import { MapProvider } from "@/contexts/MapProvider";
 import type { ReasoningEvent } from "@/lib/agent/contracts";
 import type { TripPlanDocument, TripPlanPlace } from "@/lib/agent/tripPlan/types";
@@ -16,7 +21,6 @@ import {
   Sparkles,
   Utensils,
   Backpack,
-  Info,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -115,6 +119,18 @@ export function StructuredTripPlanView({
       : "";
 
   const places = plan.topPlacesToVisit ?? [];
+  const foodSummary = stripPlaceholderText(plan.foodAndBudget);
+  const foodItems =
+    plan.foodRecommendations?.filter((f) => f.name && f.description) ??
+    (plan.localCuisine?.length
+      ? plan.localCuisine.map((c) => {
+          const cleaned = c.replace(/^🍜\s*/, "").trim();
+          const m = cleaned.match(/^(.+?)（(.+)）$/);
+          return m
+            ? { name: m[1].trim(), description: m[2].trim() }
+            : { name: cleaned.slice(0, 24), description: cleaned };
+        })
+      : []);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -129,26 +145,38 @@ export function StructuredTripPlanView({
         <h2 className="mt-1 text-xl font-bold tracking-tight text-foreground">{route}</h2>
         {dateLabel ? <p className="mt-1 text-sm text-muted-foreground">{dateLabel}</p> : null}
         <p className="mt-3 text-sm leading-relaxed text-foreground/90">{plan.overview}</p>
+        {plan.citations && plan.citations.length > 0 ? (
+          <div className="mt-3 rounded-lg border border-violet-500/15 bg-violet-500/5 px-2.5 py-2 text-[11px] text-violet-900">
+            {plan.citations.map((c) => (
+              <p key={c}>{c}</p>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <SectionCard title="天气与着装" icon={<CloudSun className="h-4 w-4" />} accentIndex={1}>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{plan.weatherTips}</p>
+        <TripPlanWeatherSection
+          dailyWeather={plan.dailyWeather}
+          weatherAdvice={plan.weatherAdvice ?? plan.weatherTips}
+          legacyText={plan.weatherTips}
+        />
       </SectionCard>
 
       <SectionCard title="交通与耗时" icon={<Navigation className="h-4 w-4" />} accentIndex={2}>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{plan.transport}</p>
+        <TripPlanTransportSection
+          segments={plan.transportSegments}
+          fallbackText={plan.transport}
+        />
       </SectionCard>
 
-      {plan.themesAndPlaces.length > 0 ? (
+      {(plan.themeHighlights?.length ?? plan.themesAndPlaces.length) > 0 ? (
         <SectionCard title="主题与推荐景点" icon={<Sparkles className="h-4 w-4" />} accentIndex={0}>
-          <ul className="space-y-1.5 text-sm text-foreground/90">
-            {plan.themesAndPlaces.map((t) => (
-              <li key={t} className="flex gap-2">
-                <span className="text-primary">•</span>
-                <span>{t}</span>
-              </li>
-            ))}
-          </ul>
+          <TripPlanThemesSection
+            themeHighlights={plan.themeHighlights}
+            themesAndPlaces={plan.themesAndPlaces}
+            topPlaces={places}
+            destination={plan.meta.destination}
+          />
         </SectionCard>
       ) : null}
 
@@ -205,14 +233,18 @@ export function StructuredTripPlanView({
       ) : null}
 
       <SectionCard title="饮食与预算" icon={<Utensils className="h-4 w-4" />} accentIndex={5}>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{plan.foodAndBudget}</p>
-        {plan.localCuisine && plan.localCuisine.length > 0 ? (
-          <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-            {plan.localCuisine.map((c) => (
-              <li key={c}>🍜 {c}</li>
-            ))}
-          </ul>
+        {foodSummary ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{foodSummary}</p>
         ) : null}
+        {foodItems.length > 0 ? (
+          <div className={cn("grid gap-3 sm:grid-cols-2", foodSummary ? "mt-4" : "")}>
+            {foodItems.map((item, index) => (
+              <FoodRecommendationCard key={`${item.name}-${index}`} item={item} index={index} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">暂无美食推荐，可在对话中补充饮食偏好后重新生成。</p>
+        )}
       </SectionCard>
 
       {plan.packingChecklist && plan.packingChecklist.length > 0 ? (
@@ -224,17 +256,6 @@ export function StructuredTripPlanView({
           </ul>
         </SectionCard>
       ) : null}
-
-      <SectionCard title="提示与免责" icon={<Info className="h-4 w-4" />} accentIndex={1}>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{plan.tipsAndDisclaimer}</p>
-        {plan.citations && plan.citations.length > 0 ? (
-          <div className="mt-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5 text-xs text-violet-900">
-            {plan.citations.map((c) => (
-              <p key={c}>{c}</p>
-            ))}
-          </div>
-        ) : null}
-      </SectionCard>
     </div>
   );
 }

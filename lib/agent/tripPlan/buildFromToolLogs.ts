@@ -1,5 +1,12 @@
 import type { ToolName } from "../contracts";
-import type { TripPlanDay, TripPlanDocument, TripPlanPlace } from "./types";
+import type {
+  TripPlanDailyWeather,
+  TripPlanDay,
+  TripPlanDocument,
+  TripPlanFoodRecommendation,
+  TripPlanPlace,
+  TripPlanTransportSegment,
+} from "./types";
 
 type ToolLogEntry = { stepId: string; toolName: ToolName; summary: string };
 
@@ -52,46 +59,272 @@ export function extractPlacesFromToolLogs(toolLogs: ToolLogEntry[]): TripPlanPla
 }
 
 export function buildWeatherTipsFromToolLogs(toolLogs: ToolLogEntry[]): string {
-  const lines: string[] = [];
+  const daily = parseDailyWeatherFromToolLogs(toolLogs);
+  if (daily.length === 0) {
+    return "本回合未获取到完整天气预报；请以出发前当地临近预报为准。";
+  }
+  return buildWeatherAdviceFromToolLogs(daily);
+}
+
+export function parseDailyWeatherFromToolLogs(toolLogs: ToolLogEntry[]): TripPlanDailyWeather[] {
+  const byDate = new Map<string, TripPlanDailyWeather>();
   for (const log of toolLogs) {
     if (log.toolName !== "weather_forecast") continue;
     const data = parseToolJson(log.summary);
     if (!data) continue;
     const dateIso = typeof data.dateIso === "string" ? data.dateIso : "";
-    const city = typeof data.city === "string" ? data.city : "";
     const weather = typeof data.weather === "string" ? data.weather : "";
-    const note = typeof data.note === "string" ? data.note : "";
-    if (dateIso && weather) {
-      lines.push(`${dateIso} ${city || ""}：${weather}${note ? `（${note}）` : ""}`);
-    }
+    if (!dateIso || !weather) continue;
+    byDate.set(dateIso, {
+      dateIso,
+      city: typeof data.city === "string" ? data.city.replace(/\s·\s.*$/, "") : undefined,
+      summary: weather,
+      tempMin: typeof data.tempMin === "number" ? data.tempMin : undefined,
+      tempMax: typeof data.tempMax === "number" ? data.tempMax : undefined,
+      precipMm: typeof data.precipMm === "number" ? data.precipMm : undefined,
+      aqi: typeof data.airQualityAqi === "number" ? data.airQualityAqi : undefined,
+      airQuality: typeof data.airQualityCategory === "string" ? data.airQualityCategory : undefined,
+    });
   }
-  return lines.length > 0
-    ? lines.join("\n")
-    : "本回合未获取到完整天气预报；请以出发前当地临近预报为准。";
+  return [...byDate.values()].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+}
+
+export function buildWeatherAdviceFromToolLogs(daily: TripPlanDailyWeather[]): string {
+  if (daily.length === 0) {
+    return "请以出发前当地临近预报为准，携带适季衣物与雨具。";
+  }
+  const rainyDays = daily.filter((d) => /雨|雷|雪/.test(d.summary));
+  const hotDays = daily.filter((d) => (d.tempMax ?? 0) >= 30);
+  const aqi = daily.find((d) => d.aqi != null)?.aqi;
+  const parts: string[] = [];
+  if (rainyDays.length > 0) {
+    const dates = rainyDays.map((d) => d.dateIso.slice(5)).join("、");
+    parts.push(`${dates} 可能有降水或雷阵雨，建议携带便携雨具`);
+  }
+  if (hotDays.length > 0) {
+    parts.push("日间气温偏高，注意防晒补水，体感可能闷热");
+  }
+  if (aqi != null && aqi <= 50) {
+    parts.push(`空气质量优（AQI ${aqi}），适合户外活动`);
+  } else if (aqi != null && aqi > 100) {
+    parts.push(`部分日期 AQI 偏高（${aqi}），敏感人群减少长时间户外`);
+  }
+  if (rainyDays.length >= Math.ceil(daily.length / 2)) {
+    parts.push("雨日优先安排室内备选或缩短户外停留");
+  } else if (rainyDays.length > 0) {
+    parts.push("可错峰安排晨间或傍晚户外，避开对流高发时段");
+  }
+  return parts.length > 0 ? parts.join("；") + "。" : "整体天气适宜出行，请备轻便外套与舒适步行鞋。";
 }
 
 export function buildTransportFromToolLogs(toolLogs: ToolLogEntry[]): string {
-  const lines: string[] = [];
+  return buildTransportBundleFromToolLogs(toolLogs).summary;
+}
+
+function recommendLocalMode(
+  mode: string,
+  distanceKm: number,
+  durationMinutes: number,
+  note?: string
+): string {
+  const parts: string[] = [];
+  if (mode === "walking") {
+    if (distanceKm <= 1.2) {
+      parts.push("推荐步行，适合慢游拍照");
+    } else if (distanceKm <= 2.5) {
+      parts.push(`可步行（约 ${durationMinutes} 分钟），也可共享单车缩短路程`);
+    } else {
+      parts.push(`步行约 ${durationMinutes} 分钟偏长，建议公交/打车/骑行接驳`);
+    }
+  } else if (mode === "transit") {
+    parts.push("优先公交/地铁；高峰时段请预留候车与换乘缓冲");
+  } else if (mode === "driving") {
+    parts.push("驾车/网约车适合携带行李或雨天出行");
+  } else {
+    parts.push("按实际路况选择步行或公共交通");
+  }
+  if (note && note !== "OK") parts.push(note);
+  return parts.join("；");
+}
+
+function parseRailSegment(data: Record<string, unknown>): TripPlanTransportSegment | null {
+  const origin = typeof data.originCity === "string" ? data.originCity : "";
+  const dest = typeof data.destinationCity === "string" ? data.destinationCity : "";
+  if (!origin || !dest) return null;
+  const trains = Array.isArray(data.trains) ? data.trains : [];
+  const first = trains[0] as Record<string, unknown> | undefined;
+  const duration =
+    typeof first?.runTime === "string"
+      ? first.runTime
+      : typeof first?.duration === "string"
+        ? first.duration
+        : undefined;
+  const trainNo = typeof first?.trainNo === "string" ? first.trainNo : undefined;
+  const dateIso = typeof data.dateIso === "string" ? data.dateIso : "";
+  let recommendation = `${origin} → ${dest}：建议优先高铁/动车`;
+  if (trainNo && duration) {
+    recommendation += `（例：${trainNo} 历时约 ${duration}，查询日 ${dateIso || "见工具"}）`;
+  } else if (trains.length === 0) {
+    recommendation += "；本回合未查到具体车次，请以 12306 为准";
+  }
+  recommendation += "。抵达目的地后使用打车/地铁接驳至酒店。";
+  return {
+    category: "intercity",
+    origin,
+    destination: dest,
+    durationMinutes: undefined,
+    mode: "rail",
+    recommendation,
+  };
+}
+
+function buildIntercityFallback(origin?: string, destination?: string): TripPlanTransportSegment | null {
+  if (!origin?.trim() || !destination?.trim() || origin.trim() === destination.trim()) return null;
+  return {
+    category: "intercity",
+    origin: origin.trim(),
+    destination: destination.trim(),
+    mode: "rail",
+    recommendation: `${origin} → ${destination}：跨城段建议高铁/动车或航班，购票与时刻以 12306 / 航司为准；抵达后打车或地铁前往市区首站。`,
+  };
+}
+
+export function buildTransportBundleFromToolLogs(
+  toolLogs: ToolLogEntry[],
+  opts?: { originCity?: string; destination?: string }
+): { segments: TripPlanTransportSegment[]; summary: string } {
+  const segments: TripPlanTransportSegment[] = [];
+  let hasIntercity = false;
+
   for (const log of toolLogs) {
+    if (log.toolName === "rail_schedule_hint") {
+      const data = parseToolJson(log.summary);
+      if (!data) continue;
+      const seg = parseRailSegment(data);
+      if (seg) {
+        segments.push(seg);
+        hasIntercity = true;
+      }
+      continue;
+    }
     if (log.toolName !== "maps_route_estimate") continue;
     const data = parseToolJson(log.summary);
     if (!data) continue;
-    const origin = shortPlaceName(data.originFormattedAddress) ?? data.origin;
-    const dest = shortPlaceName(data.destinationFormattedAddress) ?? data.destination;
-    const mode = data.modeUsedForMetrics ?? data.mode;
-    const dist = data.distanceKm ?? (Number(data.distanceMeters) / 1000).toFixed(1);
-    const dur = data.durationHuman ?? (data.durationMinutes ? `约 ${data.durationMinutes} 分钟` : "");
-    const note = typeof data.note === "string" && data.note !== "OK" ? data.note : "";
-    if (origin && dest) {
-      lines.push(
-        `${origin} → ${dest}：${mode ?? "路线"}，约 ${dist} km，${dur}${note ? `；${note}` : ""}`
-      );
+    const origin =
+      (typeof data.origin === "string" ? data.origin.trim() : null) ??
+      shortPlaceName(data.originFormattedAddress) ??
+      null;
+    const dest =
+      (typeof data.destination === "string" ? data.destination.trim() : null) ??
+      shortPlaceName(data.destinationFormattedAddress) ??
+      null;
+    if (!origin || !dest) continue;
+
+    const mode = String(data.modeUsedForMetrics ?? data.mode ?? "walking");
+    const distanceKm = Number(
+      data.distanceKm ?? (Number(data.distanceMeters) / 1000).toFixed(1)
+    );
+    const durationMinutes = Number(data.durationMinutes ?? Math.round(Number(data.durationSeconds) / 60));
+    const note = typeof data.note === "string" ? data.note : undefined;
+
+    segments.push({
+      category: "local",
+      origin,
+      destination: dest,
+      distanceKm: Number.isFinite(distanceKm) ? distanceKm : undefined,
+      durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
+      mode,
+      recommendation: recommendLocalMode(
+        mode,
+        Number.isFinite(distanceKm) ? distanceKm : 0,
+        Number.isFinite(durationMinutes) ? durationMinutes : 0,
+        note
+      ),
+    });
+  }
+
+  if (!hasIntercity) {
+    const fallback = buildIntercityFallback(opts?.originCity, opts?.destination);
+    if (fallback) segments.unshift(fallback);
+  }
+
+  if (segments.length === 0) {
+    return {
+      segments: [],
+      summary: "本回合未获取到路线耗时；跨城请以 12306 为准，市内请预留弹性接驳时间。",
+    };
+  }
+
+  const summary = segments
+    .map((s) => {
+      const dist = s.distanceKm != null ? ` · ${s.distanceKm} km` : "";
+      const dur = s.durationMinutes != null ? ` · 约 ${s.durationMinutes} 分钟` : "";
+      const mode = s.mode ? ` · ${s.mode}` : "";
+      return `${s.origin} → ${s.destination}${mode}${dist}${dur}\n${s.recommendation}`;
+    })
+    .join("\n\n");
+
+  return { segments, summary };
+}
+
+const FOOD_POI_KEYWORDS = /餐|食|美食|清真|饭|面|小吃|咖啡|茶|蚝|拉麵|拉面|火锅|粥|烧|菜馆/;
+
+export function extractFoodFromPoiSearch(toolLogs: ToolLogEntry[]): TripPlanFoodRecommendation[] {
+  const seen = new Set<string>();
+  const items: TripPlanFoodRecommendation[] = [];
+
+  for (const log of toolLogs) {
+    if (log.toolName !== "poi_search") continue;
+    const data = parseToolJson(log.summary);
+    if (!data) continue;
+    const keywords = typeof data.keywords === "string" ? data.keywords : "";
+    if (!FOOD_POI_KEYWORDS.test(keywords)) continue;
+
+    const pois = data.pois;
+    if (!Array.isArray(pois)) continue;
+
+    for (const raw of pois) {
+      if (!raw || typeof raw !== "object") continue;
+      const p = raw as Record<string, unknown>;
+      const name = typeof p.name === "string" ? p.name.trim() : "";
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      const address = typeof p.address === "string" ? p.address.trim() : "";
+      const type = typeof p.type === "string" ? p.type.split(";").pop()?.trim() : "";
+      const tel = typeof p.tel === "string" ? p.tel : "";
+      const descParts = [address, type].filter(Boolean);
+      if (tel) descParts.push(`电话 ${tel}`);
+      items.push({
+        name,
+        description: descParts.length > 0 ? descParts.join(" · ") : "本地餐饮 POI，可结合行程就近用餐",
+      });
+      if (items.length >= 6) return items;
     }
   }
-  if (lines.length === 0) {
-    return "本回合未获取到完整路线耗时；市内接驳请预留弹性，跨城铁路以 12306 为准。";
+  return items;
+}
+
+export function buildFoodBudgetFromPreferences(opts: {
+  destination?: string;
+  budgetCny?: number;
+  dietaryPreset?: string;
+}): string {
+  const dest = opts.destination || "当地";
+  const parts: string[] = [`${dest}用餐参考：`];
+  if (opts.dietaryPreset && opts.dietaryPreset !== "none") {
+    const label =
+      opts.dietaryPreset === "halal"
+        ? "清真友好"
+        : opts.dietaryPreset === "vegetarian"
+          ? "素食"
+          : "本地风味";
+    parts.push(`已按${label}偏好筛选`);
   }
-  return lines.join("\n");
+  if (opts.budgetCny != null && opts.budgetCny > 0) {
+    parts.push(`人均约 ${opts.budgetCny} 元/天`);
+  }
+  parts.push("下列门店来自本轮 POI 检索，到店前可电话确认营业时间与是否合口味。");
+  return parts.join("，") + "。";
 }
 
 function enumerateIsoDates(start?: string, end?: string): string[] {

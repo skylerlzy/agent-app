@@ -49,35 +49,39 @@ export function TripPlanTimeline({ itinerary }: { itinerary: TripPlanDay[] }) {
   }
 
   return (
-    <ol className="relative ml-3 border-s border-emerald-200/80 pl-8">
+    <ol className="space-y-6">
       {filtered.map((day) => (
-        <li key={day.title} className="relative mb-8 last:mb-0">
-          <span className="absolute -left-[1.15rem] flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/60 bg-emerald-50 text-emerald-700 shadow-sm ring-4 ring-background">
-            <Calendar className="h-3.5 w-3.5" />
-          </span>
-          <div className="mb-3">
-            <h4 className="text-sm font-bold text-emerald-900">{day.title}</h4>
-            {day.dateIso ? <p className="text-[11px] text-muted-foreground">{day.dateIso}</p> : null}
-          </div>
-          <div className="space-y-4">
-            <ActivityBlock
-              heading="上午"
-              icon={<Sunrise className="h-3.5 w-3.5 text-sky-600" />}
-              items={day.activities.morning}
-              tone="text-sky-800"
-            />
-            <ActivityBlock
-              heading="下午"
-              icon={<Sun className="h-3.5 w-3.5 text-amber-600" />}
-              items={day.activities.afternoon}
-              tone="text-amber-800"
-            />
-            <ActivityBlock
-              heading="晚上"
-              icon={<Sunset className="h-3.5 w-3.5 text-violet-600" />}
-              items={day.activities.evening}
-              tone="text-violet-800"
-            />
+        <li key={day.title} className="relative">
+          <div className="flex gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-emerald-300/60 bg-emerald-50 text-emerald-700 shadow-sm">
+              <Calendar className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <h4 className="text-sm font-bold text-emerald-900">{day.title}</h4>
+                {day.dateIso ? <p className="text-[11px] text-muted-foreground">{day.dateIso}</p> : null}
+              </div>
+              <div className="space-y-4 border-l-2 border-emerald-100/90 pl-3">
+                <ActivityBlock
+                  heading="上午"
+                  icon={<Sunrise className="h-3.5 w-3.5 text-sky-600" />}
+                  items={day.activities.morning}
+                  tone="text-sky-800"
+                />
+                <ActivityBlock
+                  heading="下午"
+                  icon={<Sun className="h-3.5 w-3.5 text-amber-600" />}
+                  items={day.activities.afternoon}
+                  tone="text-amber-800"
+                />
+                <ActivityBlock
+                  heading="晚上"
+                  icon={<Sunset className="h-3.5 w-3.5 text-violet-600" />}
+                  items={day.activities.evening}
+                  tone="text-violet-800"
+                />
+              </div>
+            </div>
           </div>
         </li>
       ))}

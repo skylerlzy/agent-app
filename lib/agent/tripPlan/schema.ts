@@ -26,6 +26,40 @@ const placeSchema = z.object({
     .optional(),
 });
 
+const dailyWeatherSchema = z.object({
+  dateIso: z.string().min(1),
+  city: z.string().optional(),
+  summary: z.string().min(1),
+  tempMin: z.number().optional(),
+  tempMax: z.number().optional(),
+  precipMm: z.number().optional(),
+  aqi: z.number().optional(),
+  airQuality: z.string().optional(),
+});
+
+const themeHighlightSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  places: z.array(z.string()).optional(),
+  highlights: z.array(z.string()).optional(),
+});
+
+const foodRecommendationSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  imageUrl: z.string().optional(),
+});
+
+const transportSegmentSchema = z.object({
+  category: z.enum(["intercity", "local"]),
+  origin: z.string().min(1),
+  destination: z.string().min(1),
+  distanceKm: z.number().optional(),
+  durationMinutes: z.number().optional(),
+  mode: z.string().optional(),
+  recommendation: z.string().min(1),
+});
+
 export const tripPlanDocumentSchema = z.object({
   version: z.literal(1).default(1),
   meta: z
@@ -39,19 +73,32 @@ export const tripPlanDocumentSchema = z.object({
     .default({}),
   overview: z.string().min(1),
   weatherTips: z.string().min(1),
+  dailyWeather: z.array(dailyWeatherSchema).optional(),
+  weatherAdvice: z.string().optional(),
   transport: z.string().min(1),
+  transportSegments: z.array(transportSegmentSchema).optional(),
   themesAndPlaces: z.array(z.string()).default([]),
+  themeHighlights: z.array(themeHighlightSchema).optional(),
   itinerary: z.array(daySchema).min(1),
-  foodAndBudget: z.string().min(1),
-  tipsAndDisclaimer: z.string().min(1),
+  foodAndBudget: z.string().default(""),
+  tipsAndDisclaimer: z.string().default(""),
   citations: z.array(z.string()).optional(),
   topPlacesToVisit: z.array(placeSchema).default([]),
   adventuresActivities: z.array(z.string()).optional(),
   localCuisine: z.array(z.string()).optional(),
+  foodRecommendations: z.array(foodRecommendationSchema).optional(),
   packingChecklist: z.array(z.string()).optional(),
 });
 
 const FALLBACK_TEXT = "（待根据工具数据补充）";
+const PLACEHOLDER_RE = /（待根据工具数据补充）|（待补充）|^待补充|请查看推理轨迹/;
+
+function stripPlaceholderFromField(value: string): string {
+  return value
+    .replace(/（待根据工具数据补充）/g, "")
+    .replace(/（待补充）/g, "")
+    .trim();
+}
 
 function asNonEmptyString(value: unknown, fallback = FALLBACK_TEXT): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -93,8 +140,12 @@ export function normalizeTripPlanRaw(raw: unknown): unknown {
   o.overview = asNonEmptyString(o.overview);
   o.weatherTips = asNonEmptyString(o.weatherTips);
   o.transport = asNonEmptyString(o.transport);
-  o.foodAndBudget = asNonEmptyString(o.foodAndBudget);
-  o.tipsAndDisclaimer = asNonEmptyString(o.tipsAndDisclaimer);
+  o.foodAndBudget =
+    typeof o.foodAndBudget === "string" && o.foodAndBudget.trim() && !PLACEHOLDER_RE.test(o.foodAndBudget.trim())
+      ? stripPlaceholderFromField(o.foodAndBudget)
+      : "";
+  o.tipsAndDisclaimer =
+    typeof o.tipsAndDisclaimer === "string" ? o.tipsAndDisclaimer.trim() : "";
   if (!Array.isArray(o.themesAndPlaces)) o.themesAndPlaces = [];
   if (!Array.isArray(o.topPlacesToVisit)) o.topPlacesToVisit = [];
   if (Array.isArray(o.itinerary)) {

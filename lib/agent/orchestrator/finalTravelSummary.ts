@@ -5,11 +5,12 @@ import { formatAgentKnowledgeContext, formatCitations } from "../knowledge";
 import type { RunDoneTravelOutput, TripPlanDocument } from "../tripPlan/types";
 import {
   buildItineraryFromToolLogs,
-  buildThemesFromToolLogs,
   buildTransportFromToolLogs,
-  buildWeatherTipsFromToolLogs,
+  buildWeatherAdviceFromToolLogs,
   extractPlacesFromToolLogs,
+  parseDailyWeatherFromToolLogs,
 } from "../tripPlan/buildFromToolLogs";
+import { enrichTripPlanWithToolData } from "../tripPlan/enrichTripPlan";
 import {
   extractTripPlanFromLlmPayload,
   parseTripPlanDocument,
@@ -31,10 +32,10 @@ function buildFallbackTripPlan(
 ): TripPlanDocument {
   const prefs = input.context.preferences;
   const steps = flattenSteps(plan);
-  const weatherTips = buildWeatherTipsFromToolLogs(toolLogs);
+  const dailyWeather = parseDailyWeatherFromToolLogs(toolLogs);
+  const weatherAdvice = buildWeatherAdviceFromToolLogs(dailyWeather);
   const transport = buildTransportFromToolLogs(toolLogs);
   const places = extractPlacesFromToolLogs(toolLogs);
-  const themes = buildThemesFromToolLogs(toolLogs, prefs.destination);
   const itinerary = buildItineraryFromToolLogs(toolLogs, {
     destination: prefs.destination,
     tripStart: prefs.tripStartDateIso,
@@ -46,7 +47,7 @@ function buildFallbackTripPlan(
       ? `${prefs.originCity} → ${prefs.destination}`
       : prefs.destination;
 
-  return {
+  const draft: TripPlanDocument = {
     version: 1,
     meta: {
       destination: prefs.destination,
@@ -58,31 +59,39 @@ function buildFallbackTripPlan(
     overview:
       plan.plannerRationale?.trim().slice(0, 400) ||
       `已结合 ${toolLogs.length} 条工具观测与 ${steps.length} 个规划步骤，为 ${prefs.destination || "本次出行"} 生成可执行行程草案。`,
-    weatherTips,
+    weatherTips: weatherAdvice,
+    dailyWeather,
+    weatherAdvice,
     transport,
-    themesAndPlaces: themes,
+    themesAndPlaces: [],
     itinerary,
-    foodAndBudget:
-      prefs.budgetCny != null && prefs.budgetCny > 0
-        ? `参考预算约 ${prefs.budgetCny} 元/人；餐饮可结合当地特色灵活安排。`
-        : "餐饮可结合当地特色与预算灵活安排；具体消费以现场为准。",
-    tipsAndDisclaimer:
-      "方案基于工具观测与知识检索生成；开放时间与票价以官方为准，铁路时刻以 12306 为准。",
+    foodAndBudget: "",
+    tipsAndDisclaimer: "",
     citations: citations ? [citations] : undefined,
     topPlacesToVisit: places,
-    adventuresActivities: themes.slice(0, 4),
+    adventuresActivities: [],
     localCuisine: [],
-    packingChecklist: /雨|雷/.test(weatherTips) ? ["折叠伞或雨衣", "防滑鞋"] : undefined,
+    packingChecklist: /雨|雷/.test(weatherAdvice) ? ["折叠伞或雨衣", "防滑鞋"] : undefined,
   };
+  return enrichTripPlanWithToolData(draft, toolLogs, input);
 }
 
 const TRIP_PLAN_JSON_HINT = `tripPlan 对象须包含字段：
 version=1, meta{destination,origin,tripStart,tripEnd,routeLabel},
-overview, weatherTips, transport, themesAndPlaces(string[]),
+overview,
+dailyWeather[{dateIso,city?,summary,tempMin?,tempMax?,precipMm?,aqi?,airQuality?}]（从工具观测逐日填写）,
+weatherAdvice（string，综合着装与出行建议，勿与 dailyWeather 重复罗列）,
+weatherTips（可与 weatherAdvice 相同，兼容字段）,
+transport（须含分段路线；优先 transportSegments）,
+transportSegments[{category:"intercity"|"local",origin,destination,distanceKm?,durationMinutes?,mode?,recommendation}]，
+themeHighlights[{title,description,places?}]（至少 2 条，结合用户 travelThemes）,
+themesAndPlaces(string[]，与 themeHighlights 标题一致),
 itinerary[{title, dateIso?, activities{morning,afternoon,evening:[{itineraryItem,briefDescription}]}}],
-foodAndBudget, tipsAndDisclaimer, citations?(string[]),
-topPlacesToVisit[{name, coordinates?{lat,lng}}]（至少 3 个，尽量带坐标）,
-adventuresActivities?, localCuisine?, packingChecklist?`;
+foodAndBudget（预算与用餐策略，勿写「待补充」；无把握可留空字符串）,
+foodRecommendations[{name,description}]（至少 2 条当地美食详解，必填）,
+citations?(string[]),
+topPlacesToVisit[{name, coordinates?{lat,lng}}]（至少 3 个，优先路线工具地点）,
+localCuisine?, packingChecklist?`;
 
 async function requestStructuredPlan(
   llm: ILLMClient,
@@ -132,7 +141,10 @@ export async function synthesizeStructuredTravelPlan(
 要求：
 - **禁止**把「执行计划」里的步骤描述（如「查询天气预报」）原样写入 itinerary；itinerary 必须是用户可执行的游览/交通/餐饮安排。
 - itinerary 按天排列，每天分 morning/afternoon/evening；结合 tripStart/tripEnd 写真实日期与景点名。
-- 从工具数据提炼 weatherTips、transport 的具体数值与结论。
+- 从工具数据提炼 dailyWeather、weatherAdvice、transport 的具体数值与结论；**禁止**输出「待根据工具数据补充」。
+- themeHighlights 每条 description 至少 2 句，点名关联景点。
+- foodRecommendations 至少 2 条；若 poi_search 含餐厅 POI，须写入 foodRecommendations（名称+地址/类型）。
+- themeHighlights 每条含 title、description（≥2 句）、places、highlights（2～3 条体验要点）。
 - topPlacesToVisit 至少 3 个，优先使用路线工具中的地点与坐标。
 - 若工具数据缺失，诚实说明，不得杜撰。
 - 若【RAG 知识片段】非空，写入 citations：[来源: 文档标题 · 引用位置]。
@@ -195,9 +207,7 @@ export async function buildRunDoneTravelOutput(
     if (citations && !result.tripPlan.citations?.length) {
       result.tripPlan.citations = [citations];
     }
-    if (!result.tripPlan.topPlacesToVisit?.length) {
-      result.tripPlan.topPlacesToVisit = extractPlacesFromToolLogs(toolLogs);
-    }
+    result.tripPlan = enrichTripPlanWithToolData(result.tripPlan, toolLogs, input);
     return result;
   } catch {
     return fallback();
