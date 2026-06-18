@@ -23,7 +23,7 @@ import {
   weatherMatchesTrip,
   type ToolLogEntry,
 } from "./tripContext";
-import { TRAVEL_THEME_OPTIONS } from "@/lib/tripPreferenceOptions";
+import { TRAVEL_THEME_OPTIONS } from "../../tripPreferenceOptions";
 
 const THEME_COPY: Record<string, { blurb: (dest: string) => string; highlights: string[] }> = {
   historical: {
