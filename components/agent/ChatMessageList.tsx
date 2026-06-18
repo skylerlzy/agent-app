@@ -4,7 +4,6 @@ import type { ReasoningEvent } from "@/lib/agent/contracts";
 import type { StoredChatMessage } from "@/lib/conversationStorage";
 import { ReasoningPipeline } from "@/components/agent/ReasoningPipeline";
 import { TracePanel } from "@/components/agent/TracePanel";
-import { MarkdownTravelBody } from "@/components/agent/MarkdownTravelBody";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -74,10 +73,6 @@ function AssistantBubble({
             </div>
           ) : message.status === "error" ? (
             <p className="text-sm text-destructive">{message.content || "运行失败"}</p>
-          ) : message.content.includes("##") ? (
-            <div className="prose-sm max-w-none text-sm">
-              <MarkdownTravelBody markdown={message.content} />
-            </div>
           ) : (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{message.content}</p>
           )}

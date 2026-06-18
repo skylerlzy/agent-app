@@ -134,15 +134,16 @@ export const updatePreferences = mutation({
   },
 });
 
-/** 成员3/4：全程行程 Markdown 写回 */
-export const patchTripPlanInternal = internalMutation({
+/** 全程结构化行程写回 */
+export const patchTripPlanStructuredInternal = internalMutation({
   args: {
     conversationId: v.id("conversations"),
-    tripPlanMarkdown: v.string(),
+    tripPlanStructuredJson: v.string(),
   },
-  async handler(ctx, { conversationId, tripPlanMarkdown }) {
+  async handler(ctx, { conversationId, tripPlanStructuredJson }) {
     await ctx.db.patch(conversationId, {
-      tripPlanMarkdown,
+      tripPlanStructuredJson,
+      tripPlanMarkdown: undefined,
       updatedAt: Date.now(),
     });
   },
@@ -196,6 +197,22 @@ export const deleteConversation = mutation({
     }
 
     await ctx.db.delete(conversationId);
+  },
+});
+
+/** 一次性清理旧版 tripPlanMarkdown 字段（Convex Dashboard 手动触发一次即可） */
+export const stripLegacyTripPlanMarkdownInternal = internalMutation({
+  args: {},
+  async handler(ctx) {
+    const rows = await ctx.db.query("conversations").collect();
+    let cleaned = 0;
+    for (const row of rows) {
+      if (row.tripPlanMarkdown !== undefined) {
+        await ctx.db.patch(row._id, { tripPlanMarkdown: undefined });
+        cleaned += 1;
+      }
+    }
+    return { cleaned, total: rows.length };
   },
 });
 

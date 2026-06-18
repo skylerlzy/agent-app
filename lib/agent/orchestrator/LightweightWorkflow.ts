@@ -8,7 +8,8 @@ import type {
   ToolName,
 } from "../contracts";
 import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
-import { parseTripPlanFromWorkingMemory } from "../context/tripPlanMemory";
+import { parseTripPlanFromWorkingMemory, formatWorkingMemoryPlanText } from "../context/tripPlanMemory";
+import { formatTripPlanForPrompt } from "../tripPlan/formatForPrompt";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { formatAgentKnowledgeContext, ensureKnowledgeCitations } from "../knowledge";
 import { decideQuickReplyTools } from "../intent/LLMQuickReplyTools";
@@ -122,8 +123,11 @@ export class LightweightWorkflow implements IAutonomousAgent {
       }
     }
 
+    const baseline = parseTripPlanFromWorkingMemory(input.contextBundle?.workingMemory);
     const tripPlan =
-      parseTripPlanFromWorkingMemory(input.contextBundle?.workingMemory) ?? "";
+      (baseline ? formatTripPlanForPrompt(baseline) : "") ||
+      formatWorkingMemoryPlanText(input.contextBundle?.workingMemory) ||
+      "";
     const historyBlock = formatHistoryForPrompt(
       input.history,
       input.contextBundle?.conversationSummary

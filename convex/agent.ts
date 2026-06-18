@@ -31,9 +31,11 @@ import { appendSkillSection } from "../lib/agent/skills/appendSkillSection";
 import { mergeGoalFromPreferences } from "../lib/agent/runtime/mergeGoalSlots";
 import {
   buildWorkingMemoryWithTripPlan,
-  extractTripPlanFromHistory,
-  shouldPatchTripPlanMarkdown,
   tripPlanFromRunDone,
+  shouldPatchTripPlan,
+  tripPlanFromStorageJson,
+  tripPlanToStorageJson,
+  formatWorkingMemoryPlanText,
 } from "../lib/agent/context/tripPlanMemory";
 import {
   buildRagQuery,
@@ -510,10 +512,8 @@ async function runAgentInConversationHandler(
     runMode: args.runMode,
   });
 
-  const tripPlan =
-    conversation.tripPlanMarkdown?.trim() ||
-    extractTripPlanFromHistory(input.history) ||
-    "";
+  const storedPlan = tripPlanFromStorageJson(conversation.tripPlanStructuredJson);
+  const tripPlan = storedPlan;
 
   if (tripPlan) {
     input.contextBundle = {
@@ -522,12 +522,6 @@ async function runAgentInConversationHandler(
       ragChunks: input.contextBundle?.ragChunks ?? [],
       workingMemory: buildWorkingMemoryWithTripPlan(tripPlan),
     };
-    if (!conversation.tripPlanMarkdown?.trim()) {
-      await ctx.runMutation(internal.conversations.patchTripPlanInternal, {
-        conversationId: args.conversationId,
-        tripPlanMarkdown: tripPlan,
-      });
-    }
   }
 
   const llmClient = new OpenAICompatibleClient();
@@ -538,7 +532,7 @@ async function runAgentInConversationHandler(
         goalText: userMessageRow.content,
         history: input.history ?? [],
         hasExistingPlan: Boolean(tripPlan),
-        planSummaryHint: tripPlan ? tripPlan.slice(0, 900) : undefined,
+        planSummaryHint: tripPlan ? formatWorkingMemoryPlanText(input.contextBundle?.workingMemory).slice(0, 900) : undefined,
       });
   const resolvedMode = modeDecision.mode;
   input.runMode = resolvedMode;
@@ -611,9 +605,7 @@ async function runAgentInConversationHandler(
   const updatesMasterPlan =
     runDone?.type === "run_done" ? runDone.payload.updatesMasterPlan : undefined;
   const tripPlanForPanel =
-    runDone?.type === "run_done"
-      ? tripPlanFromRunDone(runDone.payload, resolvedMode)
-      : undefined;
+    runDone?.type === "run_done" ? tripPlanFromRunDone(runDone.payload) : undefined;
 
   if (summary) {
     await ctx.runMutation(internal.messages.patchMessageContentInternal, {
@@ -623,10 +615,10 @@ async function runAgentInConversationHandler(
 
     if (resolvedMode === "quick_reply") {
       /* 复述/问答：不覆盖全程方案与对话级摘要 */
-    } else if (shouldPatchTripPlanMarkdown(resolvedMode, tripPlanForPanel, updatesMasterPlan)) {
-      await ctx.runMutation(internal.conversations.patchTripPlanInternal, {
+    } else if (shouldPatchTripPlan(resolvedMode, tripPlanForPanel, updatesMasterPlan)) {
+      await ctx.runMutation(internal.conversations.patchTripPlanStructuredInternal, {
         conversationId: args.conversationId,
-        tripPlanMarkdown: tripPlanForPanel!,
+        tripPlanStructuredJson: tripPlanToStorageJson(tripPlanForPanel!),
       });
       await ctx.runMutation(internal.conversations.patchSummaryInternal, {
         conversationId: args.conversationId,

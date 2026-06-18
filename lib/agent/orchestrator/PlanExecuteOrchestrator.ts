@@ -8,7 +8,7 @@ import type {
   ITraceSink,
   ReasoningEvent,
 } from "../contracts";
-import { buildRunDoneSummary, type ToolLogEntry } from "./finalTravelSummary";
+import { buildRunDoneTravelOutput, type ToolLogEntry } from "./finalTravelSummary";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { agentDebug } from "../debugLog";
 import { SessionEmitter } from "../runtime/SessionEmitter";
@@ -190,11 +190,15 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
       }
     }
 
-    const summaryText = await buildRunDoneSummary(this.summaryLlm, input, plan, toolLogs);
+    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, toolLogs);
 
     const doneEvent = emitter.emit({
       type: "run_done",
-      payload: { summary: summaryText },
+      payload: {
+        summary: travelOutput.chatReply,
+        tripPlanStructured: travelOutput.tripPlan,
+        updatesMasterPlan: true,
+      },
     });
     yield doneEvent;
     await push(doneEvent);

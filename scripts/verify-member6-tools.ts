@@ -61,11 +61,32 @@ assert(llmParsed?.mode === "incremental_revise" && llmParsed.source === "llm", "
 const reviseParsed = parseIncrementalReviseOutput(
   JSON.stringify({
     chatReply: "已将渔女雕像加入 Day3 清晨时段。",
-    tripPlanMarkdown: "## 行程总览\n修订说明\n\n## 日程建议（按天）\nDay3 …",
+    tripPlanStructured: {
+      version: 1,
+      meta: { destination: "南京", origin: "上海", tripStart: "2026-07-01", tripEnd: "2026-07-03" },
+      overview: "南京三日慢游修订版。",
+      weatherTips: "7 月炎热，注意防晒。",
+      transport: "高铁往返。",
+      themesAndPlaces: ["中山陵"],
+      itinerary: [
+        {
+          title: "Day 1",
+          dateIso: "2026-07-01",
+          activities: {
+            morning: [{ itineraryItem: "中山陵", briefDescription: "上午参观中山陵。" }],
+            afternoon: [],
+            evening: [],
+          },
+        },
+      ],
+      foodAndBudget: "人均约 200 元/天。",
+      tipsAndDisclaimer: "行程仅供参考。",
+      topPlacesToVisit: [{ name: "中山陵" }],
+    },
   })
 );
 assert(Boolean(reviseParsed?.chatReply.includes("渔女")), "增量修订 JSON 解析 chatReply");
-assert(Boolean(reviseParsed?.tripPlanMarkdown.includes("日程建议")), "增量修订 JSON 解析 tripPlanMarkdown");
+assert(reviseParsed?.tripPlanStructured?.meta?.destination === "南京", "增量修订 JSON 解析 tripPlanStructured");
 
 assert(
   ensureKnowledgeCitations("推荐老门东夜游。", [

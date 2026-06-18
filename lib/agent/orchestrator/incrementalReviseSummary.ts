@@ -1,5 +1,5 @@
 import type { ILLMClient } from "../contracts";
-import { extractJsonObject } from "../orchestrator/runModeDecision";
+import { extractJsonObject } from "./runModeDecision";
 
 /** 当增量修订 LLM 未返回 JSON 时，根据修订前后方案生成对话内变更摘要 */
 export async function summarizeRevisionChanges(

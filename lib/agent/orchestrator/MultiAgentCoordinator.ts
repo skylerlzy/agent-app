@@ -8,7 +8,7 @@ import type {
   ReasoningEvent,
   ILLMClient,
 } from "../contracts";
-import { buildRunDoneSummary, type ToolLogEntry } from "./finalTravelSummary";
+import { buildRunDoneTravelOutput, type ToolLogEntry } from "./finalTravelSummary";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 
@@ -122,10 +122,14 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
     yield handoff2;
     await push(handoff2);
 
-    const summaryText = await buildRunDoneSummary(this.summaryLlm, input, plan, toolLogs);
+    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, toolLogs);
     const done = emitter.emit({
       type: "run_done",
-      payload: { summary: summaryText, updatesMasterPlan: true },
+      payload: {
+        summary: travelOutput.chatReply,
+        tripPlanStructured: travelOutput.tripPlan,
+        updatesMasterPlan: true,
+      },
     });
     yield done;
     await push(done);

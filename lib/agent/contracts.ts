@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import type { TripPlanDocument } from "./tripPlan/types";
 
 // ---------------------------------------------------------------------------
 // 领域：用户意图与出行上下文
@@ -221,11 +222,11 @@ export type ReasoningEvent =
   | (ReasoningEventBase & {
       type: "run_done";
       payload: {
-        /** 写入对话框的本轮回复（增量修订/快速回复为简短说明） */
+        /** 写入对话框的本轮回复（增量修订/快速回复为简短说明；全量规划为 2～4 句引导语） */
         summary: string;
         updatesMasterPlan?: boolean;
-        /** 写入右侧全程方案面板的完整 Markdown（仅 full / incremental 时有值） */
-        tripPlanMarkdown?: string;
+        /** 写入右侧全程方案面板的结构化 JSON（full / incremental 时有值） */
+        tripPlanStructured?: TripPlanDocument;
       };
     })
   | (ReasoningEventBase & { type: "run_error"; payload: { message: string } })

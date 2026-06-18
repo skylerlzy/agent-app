@@ -7,9 +7,11 @@ export {
 } from "./estimateTokens";
 export {
   buildWorkingMemoryWithTripPlan,
-  extractTripPlanFromHistory,
-  looksLikeFullItinerary,
   parseTripPlanFromWorkingMemory,
+  formatWorkingMemoryPlanText,
+  shouldPatchTripPlan,
+  tripPlanFromRunDone,
+  tripPlanFromStorageJson,
+  tripPlanToStorageJson,
 } from "./tripPlanMemory";
 export { formatHistoryForPrompt } from "./formatHistoryForPrompt";
-

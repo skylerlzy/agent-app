@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { AgentRunSummary } from "@/components/agent/AgentRunSummary";
+import { StructuredTripPlanView } from "@/components/agent/tripPlan/StructuredTripPlanView";
 import { ChatMessageList } from "@/components/agent/ChatMessageList";
 import { ConversationList } from "@/components/agent/ConversationList";
 import { ChatComposerActions } from "@/components/agent/ChatComposerActions";
@@ -26,7 +26,7 @@ import {
   type MessageStatus,
   type StoredChatMessage,
 } from "@/lib/conversationStorage";
-import { extractTripPlanFromHistory } from "@/lib/agent/context/tripPlanMemory";
+import { tripPlanFromRunDone, tripPlanFromStorageJson } from "@/lib/agent/context/tripPlanMemory";
 import { CHAT_PANEL_STYLES } from "@/lib/voyageTheme";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 import { cn } from "@/lib/utils";
@@ -214,15 +214,14 @@ export function AgentWorkspace() {
   const summaryEvents = useMemo(() => liveEvents ?? [], [liveEvents]);
 
   const masterTripPlan = useMemo(() => {
-    if (activeConversation?.tripPlanMarkdown?.trim()) {
-      return activeConversation.tripPlanMarkdown.trim();
+    const stored = tripPlanFromStorageJson(activeConversation?.tripPlanStructuredJson);
+    const runDone = [...(liveEvents ?? [])].reverse().find((e) => e.type === "run_done");
+    if (runDone?.type === "run_done") {
+      const live = tripPlanFromRunDone(runDone.payload);
+      if (live) return live;
     }
-    const hist = uiMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-    return extractTripPlanFromHistory(hist) ?? "";
-  }, [activeConversation?.tripPlanMarkdown, uiMessages]);
+    return stored;
+  }, [activeConversation?.tripPlanStructuredJson, liveEvents]);
 
   const isUpdatingMasterPlan = useMemo(() => {
     if (!loading || !liveEvents?.length) return false;
@@ -398,7 +397,7 @@ export function AgentWorkspace() {
 
   const canChat = tripSetupConfirmed && isTripSetupComplete(draftPreferences);
 
-  const hasExistingPlan = Boolean(masterTripPlan.trim() || uiMessages.length > 0);
+  const hasExistingPlan = Boolean(masterTripPlan || uiMessages.length > 0);
 
   const openTripEdit = useCallback(() => {
     setTripEditDraft({ ...draftPreferences });
@@ -544,7 +543,7 @@ export function AgentWorkspace() {
         onDelete={(id) => void handleDelete(id)}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(11rem,14rem)_1fr_minmax(16rem,22rem)] lg:gap-4 xl:grid-cols-[15rem_1fr_24rem]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(11rem,13rem)_minmax(460px,34rem)_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[14rem_500px_1fr]">
         <ConversationList
           className="hidden min-h-0 lg:flex"
           conversations={listItems}
@@ -687,38 +686,21 @@ export function AgentWorkspace() {
           </div>
         </section>
 
-        <aside className="hidden min-h-0 flex-col overflow-hidden lg:flex">
-          <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-            {masterTripPlan || isUpdatingMasterPlan ? (
-              <AgentRunSummary
-                markdown={masterTripPlan}
-                events={summaryEvents}
-                isUpdating={isUpdatingMasterPlan}
-                className="sticky top-0"
-              />
-            ) : (
-              <GlassCard className="cursor-default border-dashed border-voyage-teal/30 bg-gradient-to-br from-card/85 via-voyage-teal/[0.06] to-voyage-sky/[0.05]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">全程出行方案</CardTitle>
-                  <CardDescription className="text-xs">
-                    首次规划完成后，完整多日行程将固定显示在此，不会因复述类问题而刷新。
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    同一会话内可连续追问修订；景点与日程供参考，铁路以 12306 为准。
-                  </p>
-                </CardContent>
-              </GlassCard>
-            )}
+        <aside className="hidden min-h-0 min-w-0 flex-col overflow-hidden lg:flex">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <StructuredTripPlanView
+              plan={masterTripPlan}
+              events={summaryEvents}
+              isUpdating={isUpdatingMasterPlan}
+            />
           </div>
         </aside>
       </div>
 
       {masterTripPlan || isUpdatingMasterPlan ? (
-        <div className="max-h-[38vh] shrink-0 overflow-y-auto lg:hidden">
-          <AgentRunSummary
-            markdown={masterTripPlan}
+        <div className="max-h-[42vh] shrink-0 overflow-y-auto lg:hidden">
+          <StructuredTripPlanView
+            plan={masterTripPlan}
             events={summaryEvents}
             isUpdating={isUpdatingMasterPlan}
           />

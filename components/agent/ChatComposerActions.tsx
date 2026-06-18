@@ -61,7 +61,7 @@ function ActionPill({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium text-foreground transition-colors",
+        "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors",
         a.pill,
         active && a.active,
         disabled && "pointer-events-none opacity-50"
@@ -217,7 +217,7 @@ export function ChatComposerActions({
   ];
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex flex-nowrap gap-2">
       {pills.map((pill) => (
         <div
           key={pill.id}

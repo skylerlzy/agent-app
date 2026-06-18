@@ -13,7 +13,9 @@ export default defineSchema({
     activeSkillIds: v.optional(v.array(v.string())),
     /** 本轮对话启用的工具名（成员6 联调；空表示默认全开） */
     enabledToolNames: v.optional(v.array(v.string())),
-    /** 全程 Markdown 行程（右侧固定展示；规划/修订时更新） */
+    /** 全程结构化行程 JSON（右侧固定展示；规划/修订时更新） */
+    tripPlanStructuredJson: v.optional(v.string()),
+    /** @deprecated 迭代三前 Markdown 行程；仅保留以兼容旧数据，新写入请用 tripPlanStructuredJson */
     tripPlanMarkdown: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
