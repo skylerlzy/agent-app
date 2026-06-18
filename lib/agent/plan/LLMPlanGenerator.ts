@@ -47,6 +47,20 @@ export class LLMPlanGenerator implements IPlanGenerator {
     const allowedSet = new Set<string>(allowedNames);
     const toolsSection = buildToolsPromptSection(allowedNames);
     const toolsListText = formatAllowedToolsList(allowedNames);
+    const dest =
+      context.preferences.destination?.trim() ||
+      goal.slots?.destination?.trim() ||
+      "（须从用户目标推断并写入 plannerRationale）";
+    const origin =
+      context.preferences.originCity?.trim() || goal.slots?.originCity?.trim() || "未指定";
+    const tripStart =
+      context.preferences.tripStartDateIso?.trim() || goal.slots?.startDateIso?.trim() || "";
+    const tripEnd =
+      context.preferences.tripEndDateIso?.trim() || goal.slots?.endDateIso?.trim() || "";
+    const crossCity =
+      origin !== "未指定" &&
+      dest !== "（须从用户目标推断并写入 plannerRationale）" &&
+      origin.replace(/市$/u, "") !== dest.replace(/市$/u, "");
 
     const systemPrompt = appendSkillSection(
       `
@@ -55,9 +69,17 @@ export class LLMPlanGenerator implements IPlanGenerator {
 【可用工具清单】（名称不可改；执行器会按步骤调用，**禁止同参重复**）
 ${toolsSection}
 
+【目的地硬性约束】
+- 本次行程目的地：${dest}；出发地：${origin}；出行日期：${tripStart || "未指定"} 至 ${tripEnd || "未指定"}
+- weather_forecast：city 必须为目的地的城市名（如「北京」），dateIso **必须且仅能**覆盖 ${tripStart || "tripStart"} 至 ${tripEnd || "tripEnd"} 的每一天，禁止查询行程范围外的日期或其它城市
+- poi_search：city 必须为目的地的城市，keywords 为**该目的地内**的景点、地标或餐饮
+- travelThemes 仅为体验风格标签，**不得**因此查询非目的地城市的 POI 或天气
+${crossCity ? `- 跨城行程：**必须**包含至少一步 rail_schedule_hint(originCity=${origin}, destinationCity=${dest}, dateIso=出发日)` : ""}
+- **禁止**在计划中安排景点之间的 maps_route_estimate（市内动线由总结阶段写入日程文案即可）
+
 【规划禁忌】
 - 不要生成「反复调用直到 AQI 出现」「验证站内换乘通道步行距离」等步骤。
-- 跨城段优先 rail_schedule_hint + 文字说明；同城接驳用 maps_route_estimate。
+- 跨城段必须用 rail_schedule_hint；maps_route_estimate 仅用于用户明确要求的单段同城接驳验证，不得用于景点串联规划。
 - 景点候选收集优先 poi_search；地名禁止「XX区域」「XX青旅」等模糊表述。
 
 【输出要求】
@@ -98,7 +120,7 @@ ${historyBlock}用户目标: ${goal.rawText}
 用户偏好: ${JSON.stringify(context.preferences)}
 ${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预算、节奏或某一天行程，请在 plannerRationale 中说明如何承接前文约束，并在 phases/steps 中体现修订（勿当作全新首次规划）。" : ""}
 
-请生成一个**可执行且工具利用合理**的出行规划（仅使用已列出的两种工具）：步骤应细化到「查哪几天的天气」「哪几段**同城**路线」；**必须**结合用户给出的 **tripStartDateIso / tripEndDateIso**（或 goal.slots 中的 startDateIso/endDateIso）安排逐日天气查询与日程跨度，并与 travelThemes、pace、budgetCny、transportPreferences、accommodationType、dietaryPreset、travelParty、additionalNotes 相呼应（在 plannerRationale 中要点名如何服务这些偏好）。每个 (city, dateIso) 或 (origin, destination, mode) 组合在计划中**最多出现一次**。
+请生成一个**可执行且工具利用合理**的出行规划：步骤应细化到「查目的地 ${dest} 在 ${tripStart || "tripStart"}～${tripEnd || "tripEnd"} 的逐日天气」「目的地 ${dest} 内 poi_search 景点/餐饮」${crossCity ? `「rail_schedule_hint ${origin}→${dest} 车次」` : ""}；并与 travelThemes、pace、budgetCny、transportPreferences、accommodationType、dietaryPreset、travelParty、additionalNotes 相呼应（在 plannerRationale 中要点名如何服务这些偏好）。每个 (city, dateIso) 或 rail 查询在计划中**最多出现一次**。
 **步骤 description 中凡出现公历日期、周几，必须与上文【未来14日】及「下周三」等权威对照行完全一致，禁止自行推算或写错星期。**
     `;
 

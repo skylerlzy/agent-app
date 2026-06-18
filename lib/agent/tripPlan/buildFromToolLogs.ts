@@ -7,8 +7,9 @@ import type {
   TripPlanPlace,
   TripPlanTransportSegment,
 } from "./types";
+import { citiesMatch, type ToolLogEntry } from "./tripContext";
 
-type ToolLogEntry = { stepId: string; toolName: ToolName; summary: string };
+export type { ToolLogEntry };
 
 function parseToolJson(summary: string): Record<string, unknown> | null {
   const trimmed = summary.trim();
@@ -29,33 +30,56 @@ function parseLngLat(pair?: unknown): { lat: number; lng: number } | undefined {
   return { lat, lng };
 }
 
-function shortPlaceName(address?: unknown): string | null {
-  if (typeof address !== "string" || !address.trim()) return null;
-  const t = address.trim();
-  const m = t.match(/[\u4e00-\u9fa5A-Za-z0-9（）()·\-]+$/);
-  return (m?.[0] ?? t).slice(0, 40);
-}
+const FOOD_POI_KEYWORDS = /餐|食|美食|清真|饭|面|小吃|咖啡|茶|蚝|拉麵|拉面|火锅|粥|烧|菜馆/;
+const SCENIC_POI_TYPE = /风景名胜|博物馆|古迹|旅游|公园广场|科教文化|纪念馆|寺庙|观景点|海滩|广场/;
+const NON_ATTRACTION_TYPE = /住宿|宾馆|停车|公交|地名地址|道路名|路口|公厕|生活服务场所|交叉口|辅路|辅线/;
+const NON_ATTRACTION_NAME = /酒店|停车场|交叉口|辅路|公厕|便利店|咖啡\(|便民服务|营地$/;
 
-export function extractPlacesFromToolLogs(toolLogs: ToolLogEntry[]): TripPlanPlace[] {
+/** 从 poi_search 提取目的地内景点（不用 maps 路线端点） */
+export function extractAttractionsFromPoiSearch(
+  toolLogs: ToolLogEntry[],
+  opts?: { destination?: string }
+): TripPlanPlace[] {
   const seen = new Set<string>();
   const places: TripPlanPlace[] = [];
 
   for (const log of toolLogs) {
-    if (log.toolName !== "maps_route_estimate") continue;
+    if (log.toolName !== "poi_search") continue;
     const data = parseToolJson(log.summary);
     if (!data) continue;
+    const city = typeof data.city === "string" ? data.city : "";
+    if (opts?.destination && !citiesMatch(city, opts.destination)) continue;
+    const keywords = typeof data.keywords === "string" ? data.keywords : "";
+    if (FOOD_POI_KEYWORDS.test(keywords)) continue;
 
-    for (const [addrKey, coordKey] of [
-      ["originFormattedAddress", "originResolved"],
-      ["destinationFormattedAddress", "destinationResolved"],
-    ] as const) {
-      const name = shortPlaceName(data[addrKey]);
-      if (!name || seen.has(name)) continue;
+    const pois = data.pois;
+    if (!Array.isArray(pois)) continue;
+
+    for (const raw of pois) {
+      if (!raw || typeof raw !== "object") continue;
+      const p = raw as Record<string, unknown>;
+      const name = typeof p.name === "string" ? p.name.trim() : "";
+      if (!name || seen.has(name) || NON_ATTRACTION_NAME.test(name)) continue;
+      const type = typeof p.type === "string" ? p.type : "";
+      if (NON_ATTRACTION_TYPE.test(type) && !SCENIC_POI_TYPE.test(type)) continue;
+      if (!SCENIC_POI_TYPE.test(type) && type && !/110/.test(String(p.typecode ?? ""))) continue;
+
       seen.add(name);
-      places.push({ name, coordinates: parseLngLat(data[coordKey]) });
+      places.push({
+        name,
+        coordinates: parseLngLat(p.location),
+      });
+      if (places.length >= 12) return places;
     }
   }
-  return places.slice(0, 12);
+  return places;
+}
+
+export function extractPlacesFromToolLogs(
+  toolLogs: ToolLogEntry[],
+  opts?: { destination?: string }
+): TripPlanPlace[] {
+  return extractAttractionsFromPoiSearch(toolLogs, opts);
 }
 
 export function buildWeatherTipsFromToolLogs(toolLogs: ToolLogEntry[]): string {
@@ -66,7 +90,10 @@ export function buildWeatherTipsFromToolLogs(toolLogs: ToolLogEntry[]): string {
   return buildWeatherAdviceFromToolLogs(daily);
 }
 
-export function parseDailyWeatherFromToolLogs(toolLogs: ToolLogEntry[]): TripPlanDailyWeather[] {
+export function parseDailyWeatherFromToolLogs(
+  toolLogs: ToolLogEntry[],
+  opts?: { destination?: string; tripStart?: string; tripEnd?: string }
+): TripPlanDailyWeather[] {
   const byDate = new Map<string, TripPlanDailyWeather>();
   for (const log of toolLogs) {
     if (log.toolName !== "weather_forecast") continue;
@@ -75,9 +102,12 @@ export function parseDailyWeatherFromToolLogs(toolLogs: ToolLogEntry[]): TripPla
     const dateIso = typeof data.dateIso === "string" ? data.dateIso : "";
     const weather = typeof data.weather === "string" ? data.weather : "";
     if (!dateIso || !weather) continue;
+    const city = typeof data.city === "string" ? data.city.replace(/\s·\s.*$/, "") : undefined;
+    if (opts?.destination && city && !citiesMatch(city, opts.destination)) continue;
+    if (opts?.tripStart && !isDateInRange(dateIso, opts.tripStart, opts.tripEnd)) continue;
     byDate.set(dateIso, {
       dateIso,
-      city: typeof data.city === "string" ? data.city.replace(/\s·\s.*$/, "") : undefined,
+      city,
       summary: weather,
       tempMin: typeof data.tempMin === "number" ? data.tempMin : undefined,
       tempMax: typeof data.tempMax === "number" ? data.tempMax : undefined,
@@ -87,6 +117,12 @@ export function parseDailyWeatherFromToolLogs(toolLogs: ToolLogEntry[]): TripPla
     });
   }
   return [...byDate.values()].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+}
+
+function isDateInRange(dateIso: string, start?: string, end?: string): boolean {
+  if (!start?.trim()) return true;
+  const last = end?.trim() || start;
+  return dateIso >= start && dateIso <= last;
 }
 
 export function buildWeatherAdviceFromToolLogs(daily: TripPlanDailyWeather[]): string {
@@ -121,30 +157,25 @@ export function buildTransportFromToolLogs(toolLogs: ToolLogEntry[]): string {
   return buildTransportBundleFromToolLogs(toolLogs).summary;
 }
 
-function recommendLocalMode(
-  mode: string,
-  distanceKm: number,
-  durationMinutes: number,
-  note?: string
-): string {
-  const parts: string[] = [];
-  if (mode === "walking") {
-    if (distanceKm <= 1.2) {
-      parts.push("推荐步行，适合慢游拍照");
-    } else if (distanceKm <= 2.5) {
-      parts.push(`可步行（约 ${durationMinutes} 分钟），也可共享单车缩短路程`);
-    } else {
-      parts.push(`步行约 ${durationMinutes} 分钟偏长，建议公交/打车/骑行接驳`);
-    }
-  } else if (mode === "transit") {
-    parts.push("优先公交/地铁；高峰时段请预留候车与换乘缓冲");
-  } else if (mode === "driving") {
-    parts.push("驾车/网约车适合携带行李或雨天出行");
-  } else {
-    parts.push("按实际路况选择步行或公共交通");
-  }
-  if (note && note !== "OK") parts.push(note);
-  return parts.join("；");
+function formatTrainLine(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as Record<string, unknown>;
+  const no =
+    (typeof t.trainno === "string" ? t.trainno : null) ??
+    (typeof t.trainNo === "string" ? t.trainNo : null);
+  const dep =
+    (typeof t.departureTime === "string" ? t.departureTime : null) ??
+    (typeof t.departTime === "string" ? t.departTime : null);
+  const arr =
+    (typeof t.arrivalTime === "string" ? t.arrivalTime : null) ??
+    (typeof t.arriveTime === "string" ? t.arriveTime : null);
+  const duration =
+    (typeof t.costTime === "string" ? t.costTime : null) ??
+    (typeof t.runTime === "string" ? t.runTime : null) ??
+    (typeof t.duration === "string" ? t.duration : null);
+  const type = typeof t.type === "string" ? t.type : "";
+  const parts = [no, type, dep && arr ? `${dep}→${arr}` : dep ?? arr, duration].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : null;
 }
 
 function parseRailSegment(data: Record<string, unknown>): TripPlanTransportSegment | null {
@@ -152,30 +183,43 @@ function parseRailSegment(data: Record<string, unknown>): TripPlanTransportSegme
   const dest = typeof data.destinationCity === "string" ? data.destinationCity : "";
   if (!origin || !dest) return null;
   const trains = Array.isArray(data.trains) ? data.trains : [];
-  const first = trains[0] as Record<string, unknown> | undefined;
-  const duration =
-    typeof first?.runTime === "string"
-      ? first.runTime
-      : typeof first?.duration === "string"
-        ? first.duration
-        : undefined;
-  const trainNo = typeof first?.trainNo === "string" ? first.trainNo : undefined;
   const dateIso = typeof data.dateIso === "string" ? data.dateIso : "";
-  let recommendation = `${origin} → ${dest}：建议优先高铁/动车`;
-  if (trainNo && duration) {
-    recommendation += `（例：${trainNo} 历时约 ${duration}，查询日 ${dateIso || "见工具"}）`;
-  } else if (trains.length === 0) {
-    recommendation += "；本回合未查到具体车次，请以 12306 为准";
+  const trainLines = trains
+    .map(formatTrainLine)
+    .filter((line): line is string => Boolean(line))
+    .slice(0, 10);
+
+  let recommendation = `${origin} → ${dest}`;
+  if (trainLines.length > 0) {
+    recommendation += `：铁路查询（${dateIso || "见工具"}，以 12306 为准）— ${trainLines.join("；")}`;
+  } else {
+    recommendation += "：建议优先高铁/动车；本回合未查到具体车次，请以 12306 为准";
   }
-  recommendation += "。抵达目的地后使用打车/地铁接驳至酒店。";
+  recommendation += "。抵达后使用地铁/网约车接驳至酒店或首站。";
+
+  const first = trains[0] as Record<string, unknown> | undefined;
+  const durationRaw =
+    (typeof first?.costTime === "string" ? first.costTime : null) ??
+    (typeof first?.runTime === "string" ? first.runTime : null);
+  const durationMinutes = durationRaw ? parseDurationMinutes(durationRaw) : undefined;
+
   return {
     category: "intercity",
     origin,
     destination: dest,
-    durationMinutes: undefined,
+    durationMinutes,
     mode: "rail",
     recommendation,
   };
+}
+
+function parseDurationMinutes(text: string): number | undefined {
+  const h = text.match(/(\d+)\s*小时/u);
+  const m = text.match(/(\d+)\s*分/u);
+  if (h || m) return (Number(h?.[1] ?? 0) * 60 + Number(m?.[1] ?? 0)) || undefined;
+  const colon = text.match(/(\d+):(\d+)/);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
+  return undefined;
 }
 
 function buildIntercityFallback(origin?: string, destination?: string): TripPlanTransportSegment | null {
@@ -197,79 +241,37 @@ export function buildTransportBundleFromToolLogs(
   let hasIntercity = false;
 
   for (const log of toolLogs) {
-    if (log.toolName === "rail_schedule_hint") {
-      const data = parseToolJson(log.summary);
-      if (!data) continue;
-      const seg = parseRailSegment(data);
-      if (seg) {
-        segments.push(seg);
-        hasIntercity = true;
-      }
-      continue;
-    }
-    if (log.toolName !== "maps_route_estimate") continue;
+    if (log.toolName !== "rail_schedule_hint") continue;
     const data = parseToolJson(log.summary);
     if (!data) continue;
-    const origin =
-      (typeof data.origin === "string" ? data.origin.trim() : null) ??
-      shortPlaceName(data.originFormattedAddress) ??
-      null;
-    const dest =
-      (typeof data.destination === "string" ? data.destination.trim() : null) ??
-      shortPlaceName(data.destinationFormattedAddress) ??
-      null;
-    if (!origin || !dest) continue;
-
-    const mode = String(data.modeUsedForMetrics ?? data.mode ?? "walking");
-    const distanceKm = Number(
-      data.distanceKm ?? (Number(data.distanceMeters) / 1000).toFixed(1)
-    );
-    const durationMinutes = Number(data.durationMinutes ?? Math.round(Number(data.durationSeconds) / 60));
-    const note = typeof data.note === "string" ? data.note : undefined;
-
-    segments.push({
-      category: "local",
-      origin,
-      destination: dest,
-      distanceKm: Number.isFinite(distanceKm) ? distanceKm : undefined,
-      durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : undefined,
-      mode,
-      recommendation: recommendLocalMode(
-        mode,
-        Number.isFinite(distanceKm) ? distanceKm : 0,
-        Number.isFinite(durationMinutes) ? durationMinutes : 0,
-        note
-      ),
-    });
+    const seg = parseRailSegment(data);
+    if (seg) {
+      segments.push(seg);
+      hasIntercity = true;
+    }
   }
 
   if (!hasIntercity) {
     const fallback = buildIntercityFallback(opts?.originCity, opts?.destination);
-    if (fallback) segments.unshift(fallback);
+    if (fallback) segments.push(fallback);
   }
 
   if (segments.length === 0) {
     return {
       segments: [],
-      summary: "本回合未获取到路线耗时；跨城请以 12306 为准，市内请预留弹性接驳时间。",
+      summary: "本回合未获取到跨城铁路信息；请以 12306 查询车次，市内接驳预留弹性时间。",
     };
   }
 
-  const summary = segments
-    .map((s) => {
-      const dist = s.distanceKm != null ? ` · ${s.distanceKm} km` : "";
-      const dur = s.durationMinutes != null ? ` · 约 ${s.durationMinutes} 分钟` : "";
-      const mode = s.mode ? ` · ${s.mode}` : "";
-      return `${s.origin} → ${s.destination}${mode}${dist}${dur}\n${s.recommendation}`;
-    })
-    .join("\n\n");
+  const summary = segments.map((s) => `${s.origin} → ${s.destination}\n${s.recommendation}`).join("\n\n");
 
   return { segments, summary };
 }
 
-const FOOD_POI_KEYWORDS = /餐|食|美食|清真|饭|面|小吃|咖啡|茶|蚝|拉麵|拉面|火锅|粥|烧|菜馆/;
-
-export function extractFoodFromPoiSearch(toolLogs: ToolLogEntry[]): TripPlanFoodRecommendation[] {
+export function extractFoodFromPoiSearch(
+  toolLogs: ToolLogEntry[],
+  opts?: { destination?: string }
+): TripPlanFoodRecommendation[] {
   const seen = new Set<string>();
   const items: TripPlanFoodRecommendation[] = [];
 
@@ -277,6 +279,8 @@ export function extractFoodFromPoiSearch(toolLogs: ToolLogEntry[]): TripPlanFood
     if (log.toolName !== "poi_search") continue;
     const data = parseToolJson(log.summary);
     if (!data) continue;
+    const city = typeof data.city === "string" ? data.city : "";
+    if (opts?.destination && !citiesMatch(city, opts.destination)) continue;
     const keywords = typeof data.keywords === "string" ? data.keywords : "";
     if (!FOOD_POI_KEYWORDS.test(keywords)) continue;
 
@@ -350,69 +354,74 @@ function weatherForDate(toolLogs: ToolLogEntry[], dateIso: string): string {
   return "";
 }
 
-function slotLabel(index: number): "morning" | "afternoon" | "evening" {
-  if (index % 3 === 0) return "morning";
-  if (index % 3 === 1) return "afternoon";
-  return "evening";
-}
-
 /** 用工具观测与目的地生成可读的按天行程（避免把规划步骤描述直接展示给用户） */
 export function buildItineraryFromToolLogs(
   toolLogs: ToolLogEntry[],
-  opts: { destination?: string; tripStart?: string; tripEnd?: string }
+  opts: {
+    destination?: string;
+    tripStart?: string;
+    tripEnd?: string;
+    pace?: "slow" | "balanced" | "fast";
+    origin?: string;
+  }
 ): TripPlanDay[] {
   const dates = enumerateIsoDates(opts.tripStart, opts.tripEnd);
-  const places = extractPlacesFromToolLogs(toolLogs);
+  const places = extractAttractionsFromPoiSearch(toolLogs, { destination: opts.destination });
   const dest = opts.destination?.trim() || "目的地";
+  const slotsPerDay = opts.pace === "slow" ? 2 : opts.pace === "fast" ? 3 : 2;
+  const slotOrder: Array<"morning" | "afternoon" | "evening"> = [
+    "morning",
+    "afternoon",
+    "evening",
+  ];
+  let placeIdx = 0;
 
   if (dates.length === 0) {
-    return [
-      {
-        title: "Day 1",
-        activities: {
-          morning: places[0]
-            ? [{ itineraryItem: places[0].name, briefDescription: `游览 ${places[0].name}。` }]
-            : [{ itineraryItem: `${dest}市区`, briefDescription: `在${dest}市区自由安排行程。` }],
-          afternoon: places[1]
-            ? [{ itineraryItem: places[1].name, briefDescription: `前往 ${places[1].name}。` }]
-            : [],
-          evening: places[2]
-            ? [{ itineraryItem: places[2].name, briefDescription: `晚间可在 ${places[2].name} 附近散步。` }]
-            : [],
-        },
-      },
-    ];
+    return buildSingleDayItinerary(places, dest, toolLogs, opts.tripStart);
   }
 
   return dates.map((dateIso, dayIndex) => {
     const weather = weatherForDate(toolLogs, dateIso);
-    const place = places[dayIndex] ?? places[dayIndex % Math.max(places.length, 1)];
     const rainy = /雨|雷|雪/.test(weather);
     const activities: TripPlanDay["activities"] = { morning: [], afternoon: [], evening: [] };
 
-    if (place) {
-      activities[slotLabel(dayIndex)] = [
+    if (dayIndex === 0 && opts.origin && opts.destination && !citiesMatch(opts.origin, opts.destination)) {
+      const crossCity = !citiesMatch(opts.origin, opts.destination);
+      if (crossCity) {
+        activities.morning = [
+          {
+            itineraryItem: `${opts.origin}出发 · 抵达${dest}`,
+            briefDescription: `乘高铁/动车前往${dest}（车次见「交通与耗时」），抵达后办理入住并稍作休整。${weather ? `当日天气：${weather}` : ""}`,
+          },
+        ];
+      }
+    }
+
+    let filled = 0;
+    for (const slot of slotOrder) {
+      if (filled >= slotsPerDay) break;
+      if (activities[slot].length > 0) continue;
+      const place = places[placeIdx];
+      if (!place) break;
+      placeIdx += 1;
+      filled += 1;
+      activities[slot] = [
         {
           itineraryItem: place.name,
-          briefDescription: rainy
-            ? `${dateIso} 预报${weather || "可能有降水"}，建议以 ${place.name} 室内或就近备选为主，外出携带雨具。`
-            : `${dateIso} 可安排游览 ${place.name}。${weather ? `当日天气：${weather}` : ""}`,
-        },
-      ];
-    } else {
-      activities.morning = [
-        {
-          itineraryItem: `${dest} Day ${dayIndex + 1}`,
-          briefDescription: `${dateIso} 在${dest}自由探索。${weather ? `天气：${weather}` : ""}`,
+          briefDescription: buildActivityBlurb(place.name, dateIso, weather, rainy, slot),
         },
       ];
     }
 
-    if (places[dayIndex + 1]) {
-      activities.evening = [
+    if (
+      activities.morning.length === 0 &&
+      activities.afternoon.length === 0 &&
+      activities.evening.length === 0
+    ) {
+      activities.morning = [
         {
-          itineraryItem: places[dayIndex + 1].name,
-          briefDescription: `晚间可顺路体验 ${places[dayIndex + 1].name} 周边氛围。`,
+          itineraryItem: `${dest}自由探索`,
+          briefDescription: `${dateIso} 在${dest}按节奏安排 1～2 个重点。${weather ? `天气：${weather}` : ""}`,
         },
       ];
     }
@@ -425,8 +434,95 @@ export function buildItineraryFromToolLogs(
   });
 }
 
-export function buildThemesFromToolLogs(toolLogs: ToolLogEntry[], destination?: string): string[] {
-  const places = extractPlacesFromToolLogs(toolLogs).map((p) => p.name);
+function buildSingleDayItinerary(
+  places: TripPlanPlace[],
+  dest: string,
+  toolLogs: ToolLogEntry[],
+  dateIso?: string
+): TripPlanDay[] {
+  const weather = dateIso ? weatherForDate(toolLogs, dateIso) : "";
+  const rainy = /雨|雷|雪/.test(weather);
+  return [
+    {
+      title: "Day 1",
+      dateIso,
+      activities: {
+        morning: places[0]
+          ? [
+              {
+                itineraryItem: places[0].name,
+                briefDescription: buildActivityBlurb(places[0].name, dateIso ?? "", weather, rainy, "morning"),
+              },
+            ]
+          : [{ itineraryItem: `${dest}市区`, briefDescription: `在${dest}市区自由安排行程。` }],
+        afternoon: places[1]
+          ? [
+              {
+                itineraryItem: places[1].name,
+                briefDescription: buildActivityBlurb(places[1].name, dateIso ?? "", weather, rainy, "afternoon"),
+              },
+            ]
+          : [],
+        evening: places[2]
+          ? [
+              {
+                itineraryItem: places[2].name,
+                briefDescription: buildActivityBlurb(places[2].name, dateIso ?? "", weather, rainy, "evening"),
+              },
+            ]
+          : [],
+      },
+    },
+  ];
+}
+
+function buildActivityBlurb(
+  placeName: string,
+  dateIso: string,
+  weather: string,
+  rainy: boolean,
+  slot: "morning" | "afternoon" | "evening"
+): string {
+  const timeHint =
+    slot === "morning" ? "建议上午" : slot === "afternoon" ? "下午" : "傍晚至夜间";
+  if (rainy) {
+    return `${dateIso} ${timeHint}游览 ${placeName}；预报${weather || "可能有降水"}，备雨具并准备室内备选。`;
+  }
+  return `${dateIso} ${timeHint}安排 ${placeName}。${weather ? `天气：${weather}` : "按地图串联，控制步行强度。"}`;
+}
+
+export function buildPackingChecklistFromWeather(
+  daily: TripPlanDailyWeather[],
+  destination?: string
+): string[] {
+  const items: string[] = [];
+  const seen = new Set<string>();
+  const add = (s: string) => {
+    if (!seen.has(s)) {
+      seen.add(s);
+      items.push(s);
+    }
+  };
+
+  if (daily.some((d) => /雨|雷/.test(d.summary))) add("便携雨衣或折叠伞");
+  if (daily.some((d) => (d.tempMax ?? 0) >= 28)) add("防晒霜、遮阳帽与补水壶");
+  if (daily.some((d) => (d.tempMin ?? 99) <= 12)) add("薄外套或保暖层");
+  if (daily.some((d) => /晴|多云/.test(d.summary) && (d.aqi ?? 999) <= 50)) {
+    add("口罩（可选，AQI 良好时户外舒适）");
+  }
+  add("舒适步行鞋");
+  if (destination?.trim()) {
+    add(`前往${destination.replace(/市$/u, "")}的身份证件与移动支付`);
+  }
+  if (daily.some((d) => /雪/.test(d.summary))) add("防滑鞋套或保暖手套");
+  return items.slice(0, 8);
+}
+
+export function buildThemesFromToolLogs(
+  toolLogs: ToolLogEntry[],
+  destination?: string
+): string[] {
+  const places = extractAttractionsFromPoiSearch(toolLogs, { destination }).map((p) => p.name);
   if (places.length > 0) return places.slice(0, 6);
   return destination ? [`${destination}城市漫游`, `${destination}美食体验`] : ["城市漫游"];
 }
