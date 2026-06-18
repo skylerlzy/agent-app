@@ -1,6 +1,6 @@
 "use client";
 
-import type { TripPlanTransportSegment } from "@/lib/agent/tripPlan/types";
+import type { TripPlanRailOption, TripPlanTransportSegment } from "@/lib/agent/tripPlan/types";
 import { cn } from "@/lib/utils";
 import { Bus, Car, Footprints, Plane, Train } from "lucide-react";
 
@@ -20,6 +20,66 @@ function modeLabel(mode?: string, category?: string) {
   if (mode === "transit") return "公交";
   if (mode === "driving") return "驾车";
   return "接驳";
+}
+
+function tagClass(tag?: TripPlanRailOption["tag"]) {
+  switch (tag) {
+    case "最快":
+      return "bg-violet-100 text-violet-800 border-violet-200/80";
+    case "推荐":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200/80";
+    case "经济":
+      return "bg-amber-100 text-amber-900 border-amber-200/80";
+    default:
+      return "bg-muted text-muted-foreground border-border/60";
+  }
+}
+
+function RailOptionCard({ option }: { option: TripPlanRailOption }) {
+  const price =
+    option.priceSecond && option.priceSecond !== "-"
+      ? `二等 ¥${option.priceSecond}`
+      : option.priceFirst && option.priceFirst !== "-"
+        ? `一等 ¥${option.priceFirst}`
+        : null;
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-background/75 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {option.tag ? (
+          <span
+            className={cn(
+              "inline-flex rounded-md border px-1.5 py-0.5 text-xs font-semibold",
+              tagClass(option.tag)
+            )}
+          >
+            {option.tag}
+          </span>
+        ) : null}
+        <span className="text-base font-bold tabular-nums text-foreground">
+          {option.trainNo}
+          {option.trainType ? (
+            <span className="ml-1 text-sm font-medium text-muted-foreground">{option.trainType}</span>
+          ) : null}
+        </span>
+        <span className="text-sm tabular-nums text-primary/90">{option.duration}</span>
+      </div>
+      <p className="mt-1.5 text-sm leading-relaxed text-foreground/90">
+        <span className="font-medium tabular-nums">{option.departureTime}</span>
+        <span className="mx-1 text-muted-foreground">·</span>
+        {option.departStation}
+        <span className="mx-1.5 text-muted-foreground">→</span>
+        <span className="font-medium tabular-nums">{option.arrivalTime}</span>
+        <span className="mx-1 text-muted-foreground">·</span>
+        {option.arriveStation}
+      </p>
+      {(price || option.seatsAvailable) && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {[price, option.seatsAvailable?.split("；")[0]].filter(Boolean).join(" · ")}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function TripPlanTransportSection({
@@ -51,19 +111,35 @@ export function TripPlanTransportSection({
                   <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">{label}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-foreground">
+                  <p className="text-base font-bold text-foreground">
                     {seg.origin}
                     <span className="mx-1.5 font-normal text-muted-foreground">→</span>
                     {seg.destination}
                   </p>
-                  {(seg.distanceKm != null || seg.durationMinutes != null) && (
-                    <p className="mt-0.5 text-xs tabular-nums text-primary/90">
-                      {seg.distanceKm != null ? `${seg.distanceKm} km` : null}
-                      {seg.distanceKm != null && seg.durationMinutes != null ? " · " : null}
-                      {seg.durationMinutes != null ? `约 ${seg.durationMinutes} 分钟` : null}
+                  {(seg.queryDateIso || seg.totalTrains != null || seg.durationMinutes != null) && (
+                    <p className="mt-0.5 text-sm tabular-nums text-primary/90">
+                      {seg.queryDateIso ? `${seg.queryDateIso} 出行` : null}
+                      {seg.queryDateIso && seg.totalTrains != null ? " · " : null}
+                      {seg.totalTrains != null ? `共 ${seg.totalTrains} 趟可选` : null}
+                      {seg.durationMinutes != null
+                        ? `${seg.queryDateIso || seg.totalTrains != null ? " · " : ""}推荐约 ${seg.durationMinutes} 分钟`
+                        : null}
                     </p>
                   )}
-                  <p className="mt-1.5 text-xs leading-relaxed text-foreground/85">{seg.recommendation}</p>
+                  {seg.railOptions && seg.railOptions.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {seg.railOptions.map((opt) => (
+                        <RailOptionCard key={`${opt.trainNo}-${opt.tag}`} option={opt} />
+                      ))}
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        数据来自第三方铁路接口，购票、改签请以 12306 为准；到站后地铁或网约车接驳至酒店。
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-1.5 text-sm leading-relaxed text-foreground/85">
+                      {seg.recommendation}
+                    </p>
+                  )}
                 </div>
               </div>
             </li>
@@ -74,8 +150,8 @@ export function TripPlanTransportSection({
   }
 
   if (fallbackText?.trim()) {
-    return <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{fallbackText}</p>;
+    return <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">{fallbackText}</p>;
   }
 
-  return <p className="text-sm text-muted-foreground">暂无交通耗时数据。</p>;
+  return <p className="text-base text-muted-foreground">暂无交通耗时数据。</p>;
 }

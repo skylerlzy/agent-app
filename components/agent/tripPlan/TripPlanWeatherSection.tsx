@@ -8,9 +8,11 @@ import {
   CloudRain,
   CloudSun,
   Cloudy,
+  Droplets,
   Snowflake,
   Sun,
-  ThermometerSun,
+  Thermometer,
+  Wind,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +23,7 @@ function weekdayLabel(dateIso: string): string {
 }
 
 function formatDateLabel(dateIso: string): string {
-  const [y, m, d] = dateIso.split("-");
+  const [, m, d] = dateIso.split("-");
   if (!m || !d) return dateIso;
   return `${Number(m)}月${Number(d)}日`;
 }
@@ -30,7 +32,7 @@ function pickWeatherVisual(summary: string): {
   Icon: LucideIcon;
   iconBg: string;
   iconColor: string;
-  rowBg: string;
+  cardBg: string;
   shortLabel: string;
 } {
   const s = summary;
@@ -39,7 +41,7 @@ function pickWeatherVisual(summary: string): {
       Icon: CloudLightning,
       iconBg: "bg-violet-100",
       iconColor: "text-violet-600",
-      rowBg: "from-violet-50/90 to-sky-50/40",
+      cardBg: "from-violet-50/95 to-indigo-50/50",
       shortLabel: "雷阵雨",
     };
   }
@@ -48,7 +50,7 @@ function pickWeatherVisual(summary: string): {
       Icon: CloudRain,
       iconBg: "bg-sky-100",
       iconColor: "text-sky-600",
-      rowBg: "from-sky-50/90 to-blue-50/30",
+      cardBg: "from-sky-50/95 to-blue-50/45",
       shortLabel: "有雨",
     };
   }
@@ -57,7 +59,7 @@ function pickWeatherVisual(summary: string): {
       Icon: Snowflake,
       iconBg: "bg-cyan-100",
       iconColor: "text-cyan-600",
-      rowBg: "from-cyan-50/80 to-slate-50/40",
+      cardBg: "from-cyan-50/90 to-slate-50/50",
       shortLabel: "降雪",
     };
   }
@@ -66,7 +68,7 @@ function pickWeatherVisual(summary: string): {
       Icon: Cloud,
       iconBg: "bg-slate-100",
       iconColor: "text-slate-600",
-      rowBg: "from-slate-50/90 to-gray-50/40",
+      cardBg: "from-slate-50/95 to-gray-50/45",
       shortLabel: "阴天",
     };
   }
@@ -75,7 +77,7 @@ function pickWeatherVisual(summary: string): {
       Icon: CloudSun,
       iconBg: "bg-amber-100",
       iconColor: "text-amber-600",
-      rowBg: "from-amber-50/80 to-orange-50/30",
+      cardBg: "from-amber-50/95 to-orange-50/40",
       shortLabel: "多云",
     };
   }
@@ -84,7 +86,7 @@ function pickWeatherVisual(summary: string): {
       Icon: Sun,
       iconBg: "bg-orange-100",
       iconColor: "text-orange-500",
-      rowBg: "from-amber-50/90 to-yellow-50/40",
+      cardBg: "from-amber-50/95 to-yellow-50/50",
       shortLabel: "晴",
     };
   }
@@ -92,99 +94,149 @@ function pickWeatherVisual(summary: string): {
     Icon: Cloudy,
     iconBg: "bg-sky-100",
     iconColor: "text-sky-500",
-    rowBg: "from-sky-50/70 to-background",
+    cardBg: "from-sky-50/80 to-background",
     shortLabel: "多变",
   };
 }
 
-function shortSummary(summary: string): string {
-  const day = summary.match(/白天[^；;]+/)?.[0];
-  const night = summary.match(/夜间[^；;]+/)?.[0];
-  if (day && night) return `${day}，${night}`;
-  return summary.length > 72 ? `${summary.slice(0, 72)}…` : summary;
+function parseDayNight(summary: string): { day?: string; night?: string } {
+  const day = summary.match(/白天[^；;]+/)?.[0]?.replace(/^白天/u, "").trim();
+  const night = summary.match(/夜间[^；;]+/)?.[0]?.replace(/^夜间/u, "").trim();
+  return { day, night };
 }
 
-function WeatherDayRow({ day }: { day: TripPlanDailyWeather }) {
+function WeatherDayCard({ day }: { day: TripPlanDailyWeather }) {
   const visual = pickWeatherVisual(day.summary);
   const { Icon } = visual;
   const weekday = weekdayLabel(day.dateIso);
+  const { day: dayPart, night: nightPart } = parseDayNight(day.summary);
 
   return (
     <li
       className={cn(
-        "flex items-center gap-3 rounded-xl border border-border/40 bg-gradient-to-r px-3 py-3 transition hover:border-primary/20 hover:shadow-sm",
-        visual.rowBg
+        "flex h-full flex-col rounded-xl border border-border/45 bg-gradient-to-br p-3 shadow-sm transition hover:border-primary/25 hover:shadow-md",
+        visual.cardBg
       )}
     >
-      <div
-        className={cn(
-          "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl shadow-inner",
-          visual.iconBg
-        )}
-      >
-        <Icon className={cn("h-6 w-6", visual.iconColor)} strokeWidth={1.75} />
-        <span className={cn("mt-0.5 text-[9px] font-semibold", visual.iconColor)}>{visual.shortLabel}</span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              visual.iconBg
+            )}
+          >
+            <Icon className={cn("h-5 w-5", visual.iconColor)} strokeWidth={1.75} />
+          </div>
+          <div>
+            <p className="text-base font-bold text-foreground">{formatDateLabel(day.dateIso)}</p>
+            <p className="text-xs text-muted-foreground">
+              {[weekday, day.city?.replace(/\s·\s.*$/, ""), visual.shortLabel].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+        </div>
+        {day.tempMin != null && day.tempMax != null ? (
+          <div className="text-right">
+            <p className="text-xl font-bold tabular-nums leading-none text-foreground">{day.tempMax}°</p>
+            <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">{day.tempMin}°～{day.tempMax}°</p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-sm font-bold text-foreground">{formatDateLabel(day.dateIso)}</span>
-          {weekday ? <span className="text-xs text-muted-foreground">{weekday}</span> : null}
-          {day.city ? <span className="text-[11px] text-muted-foreground">{day.city}</span> : null}
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-foreground/85">{shortSummary(day.summary)}</p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-          {day.aqi != null ? <span>AQI {day.aqi}{day.airQuality ? ` · ${day.airQuality}` : ""}</span> : null}
-          {day.precipMm != null && day.precipMm > 0 ? <span>降水 {day.precipMm} mm</span> : null}
-        </div>
-      </div>
-
-      {day.tempMin != null && day.tempMax != null ? (
-        <div className="shrink-0 text-right">
-          <p className="text-lg font-bold tabular-nums text-foreground">
-            {day.tempMax}°
+      <div className="mt-3 flex-1 space-y-1.5 text-sm leading-relaxed text-foreground/88">
+        {dayPart ? (
+          <p>
+            <span className="font-medium text-amber-800/90">白天</span> {dayPart}
           </p>
-          <p className="text-xs tabular-nums text-muted-foreground">{day.tempMin}°～{day.tempMax}°</p>
-        </div>
-      ) : (
-        <ThermometerSun className="h-5 w-5 shrink-0 text-muted-foreground/50" />
-      )}
+        ) : null}
+        {nightPart ? (
+          <p>
+            <span className="font-medium text-indigo-800/90">夜间</span> {nightPart}
+          </p>
+        ) : null}
+        {!dayPart && !nightPart ? (
+          <p className="line-clamp-3">{day.summary}</p>
+        ) : null}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/30 pt-2">
+        {day.aqi != null ? (
+          <span className="inline-flex items-center gap-0.5 rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground">
+            <Wind className="h-3 w-3" />
+            AQI {day.aqi}
+            {day.airQuality ? ` · ${day.airQuality}` : ""}
+          </span>
+        ) : null}
+        {day.precipMm != null && day.precipMm > 0 ? (
+          <span className="inline-flex items-center gap-0.5 rounded-md bg-background/70 px-1.5 py-0.5 text-xs text-muted-foreground">
+            <Droplets className="h-3 w-3" />
+            降水 {day.precipMm} mm
+          </span>
+        ) : null}
+        {day.tempMax != null && day.tempMax >= 30 ? (
+          <span className="inline-flex items-center gap-0.5 rounded-md bg-orange-500/10 px-1.5 py-0.5 text-xs text-orange-800">
+            <Thermometer className="h-3 w-3" />
+            偏热
+          </span>
+        ) : null}
+      </div>
     </li>
   );
+}
+
+function parseAdviceItems(weatherAdvice?: string, items?: string[]): string[] {
+  if (items?.length) return items;
+  if (!weatherAdvice?.trim()) return [];
+  return weatherAdvice
+    .split(/[；;。]\s*/u)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 4);
 }
 
 export function TripPlanWeatherSection({
   dailyWeather,
   weatherAdvice,
+  weatherAdviceItems,
   legacyText,
 }: {
   dailyWeather?: TripPlanDailyWeather[];
   weatherAdvice?: string;
+  weatherAdviceItems?: string[];
   legacyText?: string;
 }) {
   const days = dailyWeather?.length ? dailyWeather : [];
+  const adviceItems = parseAdviceItems(weatherAdvice, weatherAdviceItems);
 
   return (
     <div className="space-y-4">
       {days.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {days.map((day) => (
-            <WeatherDayRow key={day.dateIso} day={day} />
+            <WeatherDayCard key={day.dateIso} day={day} />
           ))}
         </ul>
       ) : legacyText ? (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{legacyText}</p>
+        <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">{legacyText}</p>
       ) : (
-        <p className="text-sm text-muted-foreground">暂无逐日天气预报。</p>
+        <p className="text-base text-muted-foreground">暂无逐日天气预报。</p>
       )}
 
-      {weatherAdvice?.trim() ? (
-        <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/70 to-teal-50/40 px-3 py-2.5">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-            <Sun className="h-3.5 w-3.5" />
+      {adviceItems.length > 0 ? (
+        <div className="rounded-2xl border border-emerald-200/55 bg-gradient-to-br from-emerald-50/80 via-teal-50/40 to-amber-50/30 p-3.5">
+          <p className="mb-2.5 flex items-center gap-1.5 text-sm font-bold text-emerald-900">
+            <Sun className="h-4 w-4 text-amber-500" />
             着装与出行建议
           </p>
-          <p className="text-sm leading-relaxed text-foreground/90">{weatherAdvice}</p>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {adviceItems.map((item) => (
+              <li
+                key={item}
+                className="rounded-xl border border-white/60 bg-background/75 px-2.5 py-2 text-sm leading-relaxed text-foreground/90 shadow-sm"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </div>

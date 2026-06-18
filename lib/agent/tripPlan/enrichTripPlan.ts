@@ -2,19 +2,36 @@ import type { AgentRunInput } from "../contracts";
 import type {
   TripPlanDocument,
   TripPlanFoodRecommendation,
+  TripPlanSkillMoment,
   TripPlanThemeHighlight,
 } from "./types";
 import {
   buildFoodBudgetFromPreferences,
   buildItineraryFromToolLogs,
   buildPackingChecklistFromWeather,
+  buildThemeHighlightsFromToolLogs,
   buildTransportBundleFromToolLogs,
   buildWeatherAdviceFromToolLogs,
+  buildWeatherAdviceItemsFromToolLogs,
+  countTripDays,
+  ensureFoodRecommendations,
   extractAttractionsFromPoiSearch,
+  extractCuratedAttractionsFromToolLogs,
   extractFoodFromPoiSearch,
+  isTemplateFoodName,
+  itineraryHasQualityIssues,
+  itineraryLooksMonotonous,
   parseDailyWeatherFromToolLogs,
+  topPlacesLookMonotonous,
 } from "./buildFromToolLogs";
 import { isPlaceholderText, stripPlaceholderText } from "./displayText";
+import {
+  resolveSkillTripHints,
+  skillMomentSectionTitle,
+} from "./skillTripContext";
+import {
+  themeCountMismatch,
+} from "./tripPlanNarrativeEnrichment";
 import {
   filterToolLogsForTrip,
   placeLooksLikeWrongCity,
@@ -80,7 +97,7 @@ function buildThemeHighlights(
 ): TripPlanThemeHighlight[] {
   const places = [
     ...new Set([
-      ...extractAttractionsFromPoiSearch(toolLogs, { destination: ctx.destination }).map(
+      ...extractCuratedAttractionsFromToolLogs(toolLogs, { destination: ctx.destination }).map(
         (p) => p.name
       ),
       ...(plan.topPlacesToVisit?.map((p) => p.name) ?? []),
@@ -105,10 +122,18 @@ function buildThemeHighlights(
   }
 
   if (places.length > 0) {
+    const skillHints = resolveSkillTripHints(input);
+    const toolThemes = buildThemeHighlightsFromToolLogs(toolLogs, dest, {
+      tripStart: ctx.tripStart,
+      tripEnd: ctx.tripEnd,
+      skillHints,
+    });
+    if (toolThemes.length > 0) return toolThemes;
+
     return [
       {
         title: `${dest}精选线路`,
-        description: `以 ${places.slice(0, 3).join("、")} 为核心节点，按日程串联${dest}内经典与休闲点位，兼顾打卡与留白。`,
+        description: `以 ${places.slice(0, 3).join("、")} 为核心节点，按日程串联${dest}内经典与休闲点位；${places.length > 3 ? `还可延展至 ${places.slice(3, 5).join("、")} 等。` : "每日 1～2 个重点，避免过度奔波。"}`,
         places: places.slice(0, 6),
         highlights: [
           "参考右侧地图查看节点分布",
@@ -185,15 +210,70 @@ function itineraryLooksWrong(plan: TripPlanDocument, ctx: ReturnType<typeof reso
   return items.some((a) => placeLooksLikeWrongCity(a.itineraryItem, ctx.destination));
 }
 
+const TEMPLATE_RE =
+  /比打卡十张合影更像旅行|把时钟调慢半格|本地老字号小吃|待根据工具数据补充|请查看推理轨迹/;
+
+function llmThemesAreUsable(plan: TripPlanDocument, input: AgentRunInput): boolean {
+  const themes = plan.themeHighlights;
+  if (!themes?.length) return false;
+  if (themeCountMismatch(plan, input)) return false;
+  return themes.every(
+    (t) => t.title && t.description.length >= 40 && !TEMPLATE_RE.test(t.description)
+  );
+}
+
+function llmItineraryIsUsable(plan: TripPlanDocument): boolean {
+  for (const day of plan.itinerary) {
+    for (const slot of ["morning", "afternoon", "evening"] as const) {
+      for (const act of day.activities[slot]) {
+        if (act.briefDescription.length < 28 || TEMPLATE_RE.test(act.briefDescription)) return false;
+        if (/气温|AQI|PM2\.5|降水量/.test(act.briefDescription)) return false;
+      }
+    }
+  }
+  return plan.itinerary.length > 0;
+}
+
+function buildDefaultSkillMoments(
+  plan: TripPlanDocument,
+  input: AgentRunInput
+): TripPlanSkillMoment[] | undefined {
+  const hints = resolveSkillTripHints(input);
+  if (!hints.requiresSkillMoments) return undefined;
+  if (plan.skillMoments?.length) return plan.skillMoments;
+
+  const sectionTitle = skillMomentSectionTitle(hints);
+  return plan.itinerary.slice(0, 3).map((day, i) => {
+    const evening = day.activities.evening[0];
+    const afternoon = day.activities.afternoon[0];
+    const anchor = evening?.itineraryItem ?? afternoon?.itineraryItem ?? day.title;
+    return {
+      dayLabel: day.dateIso ? `Day ${i + 1} · ${day.dateIso}` : day.title,
+      title: `${sectionTitle} · ${day.title}`,
+      description: hints.isCoupleRomantic
+        ? `建议 ${17 + (i % 2)}:30 前后在 ${anchor} 一带散步，黄昏光线最柔；之后留 40～60 分钟二人自由时间，不赶下一场。`
+        : `第 ${i + 1} 天午后安排低强度活动，${anchor} 附近预留休息与亲子互动时间。`,
+      tips: hints.isCoupleRomantic
+        ? ["可备拍立得或手写小卡片", "热门店建议提前电话确认"]
+        : ["携带儿童证件与备用零食", "留意母婴室与无障碍通道"],
+    };
+  });
+}
+
 /** LLM 输出后，用与目的地/日期匹配的工具观测补全天气/交通/美食等 */
 export function enrichTripPlanWithToolData(
   plan: TripPlanDocument,
   toolLogs: ToolLogEntry[],
-  input: AgentRunInput
+  input: AgentRunInput,
+  options?: { narrativeLocked?: boolean }
 ): TripPlanDocument {
+  const narrativeLocked = options?.narrativeLocked ?? false;
   const ctx = resolveTripContext(input, plan);
   const filteredLogs = filterToolLogsForTrip(toolLogs, ctx);
   const dest = ctx.destination ?? plan.meta.destination;
+  const skillHints = resolveSkillTripHints(input);
+  const effectivePace =
+    input.context.preferences.pace ?? skillHints.suggestedPace ?? "balanced";
 
   const toolWeather = parseDailyWeatherFromToolLogs(filteredLogs, {
     destination: dest,
@@ -214,6 +294,11 @@ export function enrichTripPlanWithToolData(
     weatherAdvice = buildWeatherAdviceFromToolLogs(dailyWeather);
   }
 
+  const weatherAdviceItems =
+    plan.weatherAdviceItems?.length && plan.weatherAdviceItems.length >= 2
+      ? plan.weatherAdviceItems
+      : buildWeatherAdviceItemsFromToolLogs(dailyWeather);
+
   let weatherTips = stripPlaceholderText(plan.weatherTips);
   if (isPlaceholderText(weatherTips)) {
     weatherTips = weatherAdvice || buildWeatherAdviceFromToolLogs(dailyWeather);
@@ -222,6 +307,7 @@ export function enrichTripPlanWithToolData(
   const transportBundle = buildTransportBundleFromToolLogs(filteredLogs, {
     originCity: ctx.origin ?? plan.meta.origin,
     destination: dest,
+    tripStart: ctx.tripStart ?? plan.meta.tripStart,
   });
   let transport = stripPlaceholderText(plan.transport);
   let transportSegments = plan.transportSegments?.filter((s) => s.category === "intercity");
@@ -234,54 +320,116 @@ export function enrichTripPlanWithToolData(
   }
 
   const poiFood = extractFoodFromPoiSearch(filteredLogs, { destination: dest });
-  let foodRecommendations = mergeFoodRecommendations(
-    plan.foodRecommendations?.filter((f) => f.name && f.description) ?? [],
-    poiFood
-  );
+  let foodRecommendations = narrativeLocked &&
+    plan.foodRecommendations?.some((f) => f.name && !isTemplateFoodName(f.name))
+    ? plan.foodRecommendations
+    : ensureFoodRecommendations(
+        filteredLogs,
+        dest,
+        input.context.preferences.dietaryPreset,
+        mergeFoodRecommendations(
+          plan.foodRecommendations?.filter((f) => f.name && f.description) ?? [],
+          poiFood
+        )
+      );
   if (!foodRecommendations.length && plan.localCuisine?.length) {
-    foodRecommendations = plan.localCuisine.map(parseFoodItem);
+    foodRecommendations = ensureFoodRecommendations(
+      filteredLogs,
+      dest,
+      input.context.preferences.dietaryPreset,
+      plan.localCuisine.map(parseFoodItem)
+    );
   }
 
   let foodAndBudget = stripPlaceholderText(plan.foodAndBudget);
-  if (!foodAndBudget && foodRecommendations.length > 0) {
+  if (
+    narrativeLocked &&
+    plan.foodAndBudget?.trim() &&
+    foodRecommendations.some((f) => !isTemplateFoodName(f.name))
+  ) {
+    foodAndBudget = plan.foodAndBudget;
+  } else if (
+    !foodAndBudget ||
+    foodRecommendations.some((f) => !plan.foodRecommendations?.find((p) => p.name === f.name))
+  ) {
     foodAndBudget = buildFoodBudgetFromPreferences({
       destination: dest,
       budgetCny: input.context.preferences.budgetCny,
       dietaryPreset: input.context.preferences.dietaryPreset,
+      restaurants: foodRecommendations,
     });
   }
 
-  const poiPlaces = extractAttractionsFromPoiSearch(filteredLogs, { destination: dest });
+  const poiPlaces = extractCuratedAttractionsFromToolLogs(filteredLogs, { destination: dest }).map(
+    ({ name, coordinates }) => ({ name, coordinates })
+  );
   let topPlacesToVisit =
-    plan.topPlacesToVisit?.length && topPlacesMatchDestination(plan.topPlacesToVisit, dest)
+    plan.topPlacesToVisit?.length &&
+    topPlacesMatchDestination(plan.topPlacesToVisit, dest) &&
+    !topPlacesLookMonotonous(plan.topPlacesToVisit)
       ? plan.topPlacesToVisit
       : poiPlaces;
 
   let itinerary = plan.itinerary;
-  if (
-    (itineraryLooksWrong(plan, ctx) || !topPlacesMatchDestination(
-      itinerary.flatMap((d) =>
-        [...d.activities.morning, ...d.activities.afternoon, ...d.activities.evening].map((a) => ({
-          name: a.itineraryItem,
-        }))
-      ),
-      dest
-    )) &&
-    (poiPlaces.length > 0 || filteredLogs.length > 0)
-  ) {
+  const shouldRebuildItinerary =
+    !narrativeLocked &&
+    !llmItineraryIsUsable(plan) &&
+    (itineraryLooksWrong(plan, ctx) ||
+      itineraryLooksMonotonous(plan) ||
+      itineraryHasQualityIssues(plan) ||
+      !topPlacesMatchDestination(
+        itinerary.flatMap((d) =>
+          [...d.activities.morning, ...d.activities.afternoon, ...d.activities.evening].map((a) => ({
+            name: a.itineraryItem,
+          }))
+        ),
+        dest
+      ));
+
+  if (shouldRebuildItinerary && (poiPlaces.length > 0 || filteredLogs.length > 0)) {
     itinerary = buildItineraryFromToolLogs(filteredLogs, {
       destination: dest,
       tripStart: ctx.tripStart ?? plan.meta.tripStart,
       tripEnd: ctx.tripEnd ?? plan.meta.tripEnd,
-      pace: input.context.preferences.pace,
+      pace: effectivePace,
       origin: ctx.origin ?? plan.meta.origin,
+      skillHints,
     });
   }
 
   const planForThemes = { ...plan, itinerary, topPlacesToVisit };
+  const tripDayCount = countTripDays(ctx.tripStart ?? plan.meta.tripStart, ctx.tripEnd ?? plan.meta.tripEnd);
   let themeHighlights = plan.themeHighlights?.filter((t) => t.title && t.description);
-  if (!themeHighlights?.length || themeHighlights.every((t) => t.description.length < 16)) {
+  const themesLookThin =
+    !narrativeLocked &&
+    !llmThemesAreUsable(plan, input) &&
+    (!themeHighlights?.length ||
+      themeHighlights.length !== tripDayCount ||
+      themeHighlights.every((t) => t.description.length < 40) ||
+      themeHighlights.some((t) => (t.highlights?.length ?? 0) < 1));
+
+  if (
+    !narrativeLocked &&
+    !llmThemesAreUsable(plan, input) &&
+    (themesLookThin || (themeHighlights?.length ?? 0) !== tripDayCount)
+  ) {
+    themeHighlights = buildThemeHighlightsFromToolLogs(filteredLogs, dest, {
+      tripStart: ctx.tripStart ?? plan.meta.tripStart,
+      tripEnd: ctx.tripEnd ?? plan.meta.tripEnd,
+      skillHints,
+    });
+  } else if (!themeHighlights?.length) {
     themeHighlights = buildThemeHighlights(input, filteredLogs, planForThemes, ctx);
+  } else if ((themeHighlights?.length ?? 0) !== tripDayCount) {
+    const rebuilt = buildThemeHighlightsFromToolLogs(filteredLogs, dest, {
+      tripStart: ctx.tripStart ?? plan.meta.tripStart,
+      tripEnd: ctx.tripEnd ?? plan.meta.tripEnd,
+      skillHints,
+    });
+    themeHighlights =
+      rebuilt.length === tripDayCount
+        ? rebuilt
+        : themeHighlights.slice(0, tripDayCount);
   } else {
     themeHighlights = themeHighlights.map((t, i) => ({
       ...t,
@@ -291,6 +439,11 @@ export function enrichTripPlanWithToolData(
       highlights: t.highlights?.length ? t.highlights : collectDayActivities(planForThemes, i).slice(0, 2),
     }));
   }
+
+  const skillMoments =
+    narrativeLocked && plan.skillMoments?.length
+      ? plan.skillMoments
+      : buildDefaultSkillMoments({ ...plan, itinerary, themeHighlights }, input);
 
   const themesAndPlaces =
     themeHighlights.length > 0 ? themeHighlights.map((t) => t.title) : plan.themesAndPlaces;
@@ -311,6 +464,7 @@ export function enrichTripPlanWithToolData(
     },
     dailyWeather,
     weatherAdvice,
+    weatherAdviceItems,
     weatherTips,
     transport,
     transportSegments,
@@ -318,6 +472,7 @@ export function enrichTripPlanWithToolData(
     themesAndPlaces,
     themeHighlights,
     foodRecommendations,
+    skillMoments,
     topPlacesToVisit,
     itinerary,
     packingChecklist,

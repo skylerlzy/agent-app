@@ -16,9 +16,17 @@ import type {
   UserGoal,
 } from "../contracts";
 import { FAILED_TURN_PREFIX } from "../reflexion/ReflexionPolicy";
+import { appendSkillSection } from "../skills/appendSkillSection";
 import { buildAgentTimeContextLines } from "../runtime/agentTimeContext";
 import { buildToolsPromptSection, formatAllowedToolsList } from "../tools/descriptions";
 import { validateToolArguments } from "../tools/ToolArgumentValidator";
+import {
+  getCanonicalDestination,
+  getCanonicalOrigin,
+  getCanonicalTripDates,
+  poiKeywordsMismatchDestination,
+} from "../tripPlan/tripContext";
+import { enforceTripToolArgs } from "../tripPlan/enforceTripToolArgs";
 import {
   hashToolResultSummary,
   normalizeToolCallKey,
@@ -85,8 +93,18 @@ export class ReactExecutor implements IReactExecutor {
     step: PlanStep;
     context: UserContext;
     goal: UserGoal;
+    skillSystemSection?: string;
   }): AsyncIterable<ReasoningEvent> {
-    const { emitter, step, context, goal } = input;
+    const { emitter, step, context, goal, skillSystemSection } = input;
+    const canonicalDest = getCanonicalDestination({ goal, context });
+    const canonicalOrigin = getCanonicalOrigin({ goal, context });
+    const { tripStart, tripEnd } = getCanonicalTripDates({ goal, context });
+    const tripBinding = {
+      destination: canonicalDest,
+      origin: canonicalOrigin,
+      tripStart,
+      tripEnd,
+    };
     const registryToolNames = this.registry.list().map((t) => t.name);
     const allowedToolSet = new Set<string>(registryToolNames);
     const toolsPrompt = buildToolsPromptSection(registryToolNames);
@@ -96,15 +114,23 @@ export class ReactExecutor implements IReactExecutor {
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: `你是一个执行专家。当前任务步骤是: "${step.description}"。
+        content: appendSkillSection(
+          `你是一个执行专家。当前任务步骤是: "${step.description}"。
         你的目标是完成本步所需的事实收集，在**必要且参数不同**时调用工具，然后收束为简短结论。
         【硬性约束】你只能使用本回合 API 传入的 tools 列表中的函数（${allowedListText}）。禁止输出任何其它函数名。
+        【目的地硬性约束】本行程权威目的地为「${canonicalDest ?? "（见用户偏好）"}」${canonicalOrigin ? `，出发地为「${canonicalOrigin}」` : ""}${tripStart ? `，出行日期 ${tripStart}～${tripEnd ?? tripStart}` : ""}。
+        - weather_forecast / poi_search 的 city **必须**为上述目的地，禁止查询其它城市。
+        - rail_schedule_hint 的 destinationCity **必须**为目的地，originCity **必须**为出发地（若已指定）。
+        - 若步骤描述中出现与目的地矛盾的城市名，以本约束为准，忽略步骤中的错误城市。
+        - 若本步为餐饮 poi_search，keywords 须含美食/餐厅/老字号等，并优先满足用户 Skill 中的氛围要求（如情侣浪漫→景观餐厅/河景餐位）。
         【禁止重复调用】同一 (tool, args) 在本步内已成功调用过则**禁止再调**；工具返回 doNotRetrySameArgs=true 或 note 含「不在 N 日预报内」「已改读实时」时，须**立即**用文字收束，勿同参重试。
         【读 note 即能力上限】工具 note 说明的数据边界即为最终答案，不要试图「再调一次拿更多字段」。
         【工具契约】
 ${toolsPrompt}
         当信息已足够完成本步骤时，请给出简短总结并结束；不要捏造工具名。
         工具参数必须符合 JSON Schema。`,
+          skillSystemSection
+        ),
       },
       {
         role: "user",
@@ -112,6 +138,9 @@ ${toolsPrompt}
           `用户整体目标: ${goal.rawText}。`,
           `当前槽位信息: ${JSON.stringify(goal.slots || {})}。`,
           `用户偏好: ${JSON.stringify(context.preferences)}。（若含 tripStartDateIso/tripEndDateIso，天气 dateIso 须落在该区间内并与【未来14日】对照一致。）`,
+          canonicalDest
+            ? `【权威目的地】${canonicalDest}——所有 weather_forecast / poi_search 必须使用此 city；禁止珠海等非目的地城市。`
+            : "",
           ...buildAgentTimeContextLines(),
           `若本步建议了 weather_forecast：city 必填；dateIso 须取自【未来14日】；**不同 city/dateIso 各调一次即可**，同参禁止重试；读 note 与 airQualityAvailable。`,
           `maps_route_estimate：仅同城分段 OD（如「深圳市深圳北站→深圳市南山区某景区」）；跨城高铁/枢纽勿调 maps；地名须含城市+具体 POI。`,
@@ -282,7 +311,37 @@ ${toolsPrompt}
           continue;
         }
 
-        const execArgs = validated.normalized;
+        const enforced = enforceTripToolArgs(toolName, validated.normalized, tripBinding);
+        const execArgs = enforced.args;
+        if (enforced.patchedFields.length > 0) {
+          messages.push({
+            role: "user",
+            content: `【系统纠正】工具参数已强制对齐行程目的地：${enforced.patchedFields.join("；")}。请基于纠正后的参数执行。`,
+          });
+        }
+
+        if (
+          toolName === "poi_search" &&
+          canonicalDest &&
+          typeof execArgs.keywords === "string" &&
+          poiKeywordsMismatchDestination(execArgs.keywords, canonicalDest)
+        ) {
+          const err = {
+            code: "POI_KEYWORDS_WRONG_CITY",
+            message: `关键词「${execArgs.keywords}」不属于目的地「${canonicalDest}」。请改用${canonicalDest}内景点/餐饮（如故宫、颐和园、天坛等），勿使用珠海或其它城市的 POI 名称。`,
+            retryable: true,
+          };
+          yield emitter.emit({ type: "tool_error", payload: { stepId: step.id, toolName, error: err } });
+          history.push({
+            ...currentTurn,
+            toolResultSummary: `${FAILED_TURN_PREFIX}${err.code}:${err.message}`,
+          });
+          messages.push({ role: "assistant", content: thoughtText });
+          messages.push({ role: "user", content: err.message });
+          turn++;
+          continue;
+        }
+
         const callKey = normalizeToolCallKey(toolName, execArgs);
         if (successfulCallKeys.has(callKey)) {
           const prev = successfulCallKeys.get(callKey)!;

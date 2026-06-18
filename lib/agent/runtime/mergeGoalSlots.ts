@@ -1,17 +1,4 @@
 import type { TripPreferences, UserGoal } from "../contracts";
-import { inferCityFromText } from "../tools/ToolArgumentValidator";
-import { normalizeCityName } from "../tripPlan/tripContext";
-
-function destinationFromMessage(rawText: string, prefDest?: string): string | undefined {
-  const inferred = inferCityFromText(rawText);
-  if (!inferred) return prefDest;
-  const bare = normalizeCityName(inferred);
-  if (rawText.includes(bare)) {
-    if (prefDest && normalizeCityName(prefDest) === bare) return prefDest;
-    return bare;
-  }
-  return prefDest;
-}
 
 /** 将 TripPreferences 与已有槽位合并为 UserGoal（成员3 对话续聊与单次 runAgent 共用） */
 export function mergeGoalFromPreferences(
@@ -22,11 +9,9 @@ export function mergeGoalFromPreferences(
   const baseSlots = existingSlots ?? {};
   const mergedSlots = {
     ...baseSlots,
-    destination: destinationFromMessage(
-      rawText,
-      preferences.destination ?? baseSlots.destination
-    ),
-    originCity: preferences.originCity ?? baseSlots.originCity,
+    /** 用户已在出行设置中确认的目的地/出发地优先于历史槽位 */
+    destination: preferences.destination?.trim() || baseSlots.destination,
+    originCity: preferences.originCity?.trim() || baseSlots.originCity,
     startDateIso: preferences.tripStartDateIso ?? baseSlots.startDateIso,
     endDateIso: preferences.tripEndDateIso ?? baseSlots.endDateIso,
     pace: preferences.pace ?? baseSlots.pace,

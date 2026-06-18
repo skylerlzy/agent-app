@@ -13,6 +13,11 @@ import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { formatAgentKnowledgeContext } from "../knowledge";
 import { buildToolsPromptSection, formatAllowedToolsList } from "../tools/descriptions";
 import { resolveEnabledToolNames } from "../tools/resolveEnabledTools";
+import {
+  getCanonicalDestination,
+  getCanonicalOrigin,
+  getCanonicalTripDates,
+} from "../tripPlan/tripContext";
 
 function allowedToolsForInput(input: AgentRunInput): ToolName[] {
   const resolved = resolveEnabledToolNames([], input.enabledToolNames);
@@ -48,15 +53,10 @@ export class LLMPlanGenerator implements IPlanGenerator {
     const toolsSection = buildToolsPromptSection(allowedNames);
     const toolsListText = formatAllowedToolsList(allowedNames);
     const dest =
-      context.preferences.destination?.trim() ||
-      goal.slots?.destination?.trim() ||
+      getCanonicalDestination({ goal, context }) ||
       "（须从用户目标推断并写入 plannerRationale）";
-    const origin =
-      context.preferences.originCity?.trim() || goal.slots?.originCity?.trim() || "未指定";
-    const tripStart =
-      context.preferences.tripStartDateIso?.trim() || goal.slots?.startDateIso?.trim() || "";
-    const tripEnd =
-      context.preferences.tripEndDateIso?.trim() || goal.slots?.endDateIso?.trim() || "";
+    const origin = getCanonicalOrigin({ goal, context }) || "未指定";
+    const { tripStart, tripEnd } = getCanonicalTripDates({ goal, context });
     const crossCity =
       origin !== "未指定" &&
       dest !== "（须从用户目标推断并写入 plannerRationale）" &&
@@ -74,7 +74,8 @@ ${toolsSection}
 - weather_forecast：city 必须为目的地的城市名（如「北京」），dateIso **必须且仅能**覆盖 ${tripStart || "tripStart"} 至 ${tripEnd || "tripEnd"} 的每一天，禁止查询行程范围外的日期或其它城市
 - poi_search：city 必须为目的地的城市，keywords 为**该目的地内**的景点、地标或餐饮
 - travelThemes 仅为体验风格标签，**不得**因此查询非目的地城市的 POI 或天气
-${crossCity ? `- 跨城行程：**必须**包含至少一步 rail_schedule_hint(originCity=${origin}, destinationCity=${dest}, dateIso=出发日)` : ""}
+- **必须**包含至少 2 步 poi_search：一步**景点/地标**、一步**餐饮**（keywords 含「美食」「特色餐厅」「老字号」或 Skill 要求的浪漫/清真等方向）；city 均为 ${dest}
+- 若【用户附加 Skill 指引】非空，plannerRationale **必须**说明 Skill 如何影响阶段划分、时段设计与工具选择
 - **禁止**在计划中安排景点之间的 maps_route_estimate（市内动线由总结阶段写入日程文案即可）
 
 【规划禁忌】
@@ -118,9 +119,10 @@ ${knowledgeBlock ? `${knowledgeBlock}\n\n` : ""}${knowledgeBlock ? "【知识约
 ${historyBlock}用户目标: ${goal.rawText}
 已提取信息: ${JSON.stringify(goal.slots || {})}
 用户偏好: ${JSON.stringify(context.preferences)}
+${input.skillSystemSection?.trim() ? `\n【用户附加 Skill 指引（须在 plannerRationale 与 steps 中贯彻）】\n${input.skillSystemSection.trim().slice(0, 2500)}\n` : ""}
 ${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预算、节奏或某一天行程，请在 plannerRationale 中说明如何承接前文约束，并在 phases/steps 中体现修订（勿当作全新首次规划）。" : ""}
 
-请生成一个**可执行且工具利用合理**的出行规划：步骤应细化到「查目的地 ${dest} 在 ${tripStart || "tripStart"}～${tripEnd || "tripEnd"} 的逐日天气」「目的地 ${dest} 内 poi_search 景点/餐饮」${crossCity ? `「rail_schedule_hint ${origin}→${dest} 车次」` : ""}；并与 travelThemes、pace、budgetCny、transportPreferences、accommodationType、dietaryPreset、travelParty、additionalNotes 相呼应（在 plannerRationale 中要点名如何服务这些偏好）。每个 (city, dateIso) 或 rail 查询在计划中**最多出现一次**。
+请生成一个**可执行且工具利用合理**的出行规划：步骤应细化到「查目的地 ${dest} 在 ${tripStart || "tripStart"}～${tripEnd || "tripEnd"} 的逐日天气」「${dest} 内 poi_search 景点」「${dest} 内 poi_search 美食/餐厅」${crossCity ? `「rail_schedule_hint ${origin}→${dest} 车次」` : ""}；并与 travelThemes、pace、budgetCny、transportPreferences、accommodationType、dietaryPreset、travelParty、additionalNotes 及 Skill 指引相呼应（在 plannerRationale 中要点名如何服务这些偏好）。每个 (city, dateIso) 或 rail 查询在计划中**最多出现一次**。
 **步骤 description 中凡出现公历日期、周几，必须与上文【未来14日】及「下周三」等权威对照行完全一致，禁止自行推算或写错星期。**
     `;
 
@@ -161,10 +163,29 @@ ${historyBlock ? "\n【多轮说明】若用户在「近期对话」中修订预
       : [...TOOL_NAMES];
     const toolsListText = formatAllowedToolsList(allowedNames);
     const allowedSet = new Set<string>(allowedNames);
+
+    const destBlock =
+      this.lastRunInput != null
+        ? (() => {
+            const { goal, context } = this.lastRunInput!;
+            const dest = getCanonicalDestination({ goal, context }) ?? "（见用户偏好）";
+            const origin = getCanonicalOrigin({ goal, context }) ?? "未指定";
+            const { tripStart, tripEnd } = getCanonicalTripDates({ goal, context });
+            return `
+【目的地硬性约束 — 修订后计划必须遵守】
+- 权威目的地：${dest}；出发地：${origin}；日期：${tripStart || "?"}～${tripEnd || "?"}
+- 所有 weather_forecast / poi_search 的 city 必须为 ${dest}，禁止珠海等非目的地城市
+- rail_schedule_hint 的 destinationCity 必须为 ${dest}
+- 禁止引用旧行程中的其它城市景点（如情侣路、香炉湾等珠海 POI）
+- 禁止 maps_route_estimate 景点串联`;
+          })()
+        : "";
+
     const systemPrompt = appendSkillSection(
       `你是一个计划修订专家。根据用户或工具反馈的错误信息，对现有的执行计划进行修订。
 输出合法 JSON，根级须含 plannerRationale（简述本次修订动机与结构调整）、phases 数组，不要 Markdown。
-【严格】每个 step 的 suggestedTools 只能包含：${toolsListText}；禁止编造其他工具名。`,
+【严格】每个 step 的 suggestedTools 只能包含：${toolsListText}；禁止编造其他工具名。
+${destBlock}`,
       this.lastSkillSystemSection
     );
     const historyBlock = formatHistoryForPrompt(

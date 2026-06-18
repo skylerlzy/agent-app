@@ -4,14 +4,19 @@ import { formatHistoryForPrompt } from "../context/formatHistoryForPrompt";
 import { formatAgentKnowledgeContext, formatCitations } from "../knowledge";
 import type { RunDoneTravelOutput, TripPlanDocument } from "../tripPlan/types";
 import {
+  buildFoodBudgetFromPreferences,
   buildItineraryFromToolLogs,
   buildPackingChecklistFromWeather,
-  buildTransportFromToolLogs,
+  buildThemeHighlightsFromToolLogs,
+  buildTransportBundleFromToolLogs,
   buildWeatherAdviceFromToolLogs,
+  buildWeatherAdviceItemsFromToolLogs,
+  ensureFoodRecommendations,
   extractPlacesFromToolLogs,
   parseDailyWeatherFromToolLogs,
 } from "../tripPlan/buildFromToolLogs";
 import { enrichTripPlanWithToolData } from "../tripPlan/enrichTripPlan";
+import { enrichTripPlanNarrativesWithLlm } from "../tripPlan/tripPlanNarrativeEnrichment";
 import {
   filterToolLogsForTrip,
   resolveTripContext,
@@ -42,14 +47,37 @@ function buildFallbackTripPlan(
     tripEnd: ctx.tripEnd ?? prefs.tripEndDateIso,
   });
   const weatherAdvice = buildWeatherAdviceFromToolLogs(dailyWeather);
-  const transport = buildTransportFromToolLogs(filteredLogs);
+  const weatherAdviceItems = buildWeatherAdviceItemsFromToolLogs(dailyWeather);
+  const transportBundle = buildTransportBundleFromToolLogs(filteredLogs, {
+    originCity: ctx.origin ?? prefs.originCity,
+    destination: dest,
+    tripStart: ctx.tripStart ?? prefs.tripStartDateIso,
+  });
+  const transport = transportBundle.summary;
+  const transportSegments = transportBundle.segments;
   const places = extractPlacesFromToolLogs(filteredLogs, { destination: dest });
+  const foodRecommendations = ensureFoodRecommendations(
+    filteredLogs,
+    dest,
+    prefs.dietaryPreset
+  );
+  const foodAndBudget = buildFoodBudgetFromPreferences({
+    destination: dest,
+    budgetCny: prefs.budgetCny,
+    dietaryPreset: prefs.dietaryPreset,
+    restaurants: foodRecommendations,
+  });
   const itinerary = buildItineraryFromToolLogs(filteredLogs, {
     destination: dest,
     tripStart: ctx.tripStart ?? prefs.tripStartDateIso,
     tripEnd: ctx.tripEnd ?? prefs.tripEndDateIso,
     pace: prefs.pace,
     origin: ctx.origin ?? prefs.originCity,
+  });
+
+  const themeHighlights = buildThemeHighlightsFromToolLogs(filteredLogs, dest, {
+    tripStart: ctx.tripStart ?? prefs.tripStartDateIso,
+    tripEnd: ctx.tripEnd ?? prefs.tripEndDateIso,
   });
 
   const routeLabel =
@@ -72,10 +100,14 @@ function buildFallbackTripPlan(
     weatherTips: weatherAdvice,
     dailyWeather,
     weatherAdvice,
+    weatherAdviceItems,
     transport,
-    themesAndPlaces: [],
+    transportSegments,
+    themesAndPlaces: themeHighlights.map((t) => t.title),
+    themeHighlights,
     itinerary,
-    foodAndBudget: "",
+    foodAndBudget,
+    foodRecommendations,
     tipsAndDisclaimer: "",
     citations: citations ? [citations] : undefined,
     topPlacesToVisit: places,
@@ -83,7 +115,7 @@ function buildFallbackTripPlan(
     localCuisine: [],
     packingChecklist: buildPackingChecklistFromWeather(dailyWeather, dest),
   };
-  return enrichTripPlanWithToolData(draft, toolLogs, input);
+  return draft;
 }
 
 const TRIP_PLAN_JSON_HINT = `tripPlan 对象须包含字段：
@@ -93,14 +125,15 @@ dailyWeather[{dateIso,city?,summary,tempMin?,tempMax?,precipMm?,aqi?,airQuality?
 weatherAdvice（string，综合着装与出行建议，勿与 dailyWeather 重复罗列）,
 weatherTips（可与 weatherAdvice 相同，兼容字段）,
 transport（跨城交通摘要；优先 transportSegments）,
-transportSegments[{category:"intercity",origin,destination,durationMinutes?,mode:"rail",recommendation}]（**仅**跨城铁路/高铁；须汇总 rail_schedule_hint 中全部相关车次，禁止写入景点间步行/驾车段）,
-themeHighlights[{title,description,places?,highlights?}]（至少 2 条，景点须为目的地内 POI）,
-themesAndPlaces(string[]，与 themeHighlights 标题一致),
-itinerary[{title, dateIso?, activities{morning,afternoon,evening:[{itineraryItem,briefDescription}]}}]（按天、不重复、仅目的地景点）,
-foodAndBudget（预算与用餐策略，勿写「待补充」；无把握可留空字符串）,
-foodRecommendations[{name,description}]（至少 2 条**目的地**餐饮，来自 poi_search）,
+transportSegments[{category:"intercity",origin,destination,durationMinutes?,mode:"rail",recommendation,railOptions?}]（**仅**跨城铁路；从 rail_schedule_hint 中**策展** 2～3 条代表性车次：最快、上午推荐、经济之选；禁止罗列全部 15 条）,
+themeHighlights[{title,description,places?,highlights?}]（**数量必须等于出行天数**；每条 description 至少 2 句，生动具体、有烟火气，禁止模板套话）,
+themesAndPlaces(string[]，与 themeHighlights 标题一致，长度=天数),
+itinerary[{title, dateIso?, activities{morning,afternoon,evening:[{itineraryItem,briefDescription}]}}]（按天、**不同主景点**；briefDescription 须结合景点特色写 2～3 句，禁止不同景点复用同一段文案）,
+foodAndBudget（预算与用餐策略，须点名具体餐厅名称；勿写「待补充」）,
+foodRecommendations[{name,description}]（至少 3 条**目的地真实餐饮** POI，来自 poi_search；description 含地址/招牌/场景）,
+skillMoments?[{dayLabel,title,description,tips?[]}]（若【用户附加 Skill 指引】含情侣/亲子等要求，须填写对应专属高光时刻）,
 citations?(string[]),
-topPlacesToVisit[{name, coordinates?{lat,lng}}]（至少 3 个**目的地景点**，来自 poi_search，勿用 maps 路线端点）,
+topPlacesToVisit[{name, coordinates?{lat,lng}}]（至少 3 个**不同**目的地主景点，每次 poi_search 取 1 个代表 POI，勿用子景点或 maps 路线端点）,
 localCuisine?, packingChecklist?（结合天气与活动，勿只写「折叠伞」两项）`;
 
 async function requestStructuredPlan(
@@ -156,12 +189,15 @@ export async function synthesizeStructuredTravelPlan(
 要求：
 - meta.destination 必须为 ${dest}；dailyWeather 仅含 tripStart～tripEnd 且 city 为目的地
 - **禁止**把「执行计划」里的步骤描述（如「查询天气预报」）原样写入 itinerary；itinerary 必须是用户可执行的游览/交通/餐饮安排。
-- itinerary 按天排列，每天分 morning/afternoon/evening；结合 tripStart/tripEnd 写真实日期与**目的地**景点名，避免重复与跨城混用
-- transportSegments **仅**含跨城 rail 段，汇总 rail_schedule_hint 全部车次；禁止景点间 maps 步行段
+- itinerary 按天排列，每天分 morning/afternoon/evening；**briefDescription 禁止写入气温/AQI/降水等天气字段**（天气仅在 dailyWeather 展示）
+- transportSegments **仅**含跨城 rail 段，从 rail_schedule_hint **精选 2～3 条**代表性车次（最快/推荐/经济），禁止罗列全部车次；禁止景点间 maps 步行段
 - 从工具数据提炼 dailyWeather、weatherAdvice、transport 的具体数值与结论；**禁止**输出「待根据工具数据补充」。
-- themeHighlights 每条 description 至少 2 句，places 须为目的地 poi_search 景点
-- foodRecommendations 至少 2 条目的地餐饮；若 poi_search 含餐厅 POI，须写入（名称+地址/类型）
-- topPlacesToVisit 至少 3 个目的地景点（poi_search），勿用 maps 路线 formattedAddress
+- themeHighlights 条数 = tripStart～tripEnd 天数；每条 description 至少 2 句，生动具体
+- itinerary 的 briefDescription 禁止写入气温/AQI/降水（天气仅在 dailyWeather 展示）；须因景点而异
+- transportSegments **仅**含跨城 rail 段；若 rail_schedule_hint 失败，可诚实说明并以样例车次标注「样例」
+- 若【用户附加 Skill 指引】非空，须在 skillMoments 与 theme/itinerary 中体现（如情侣→黄昏散步、留白、景观餐厅）
+- foodRecommendations 至少 3 条，须为 poi_search 真实店名
+- topPlacesToVisit 至少 3 个**互不重复**的主景点（每次 poi_search 取 1 个代表 POI），勿用 maps 路线 formattedAddress
 - 若工具数据缺失，诚实说明，不得杜撰其它城市内容
 - 若【RAG 知识片段】非空，写入 citations：[来源: 文档标题 · 引用位置]。
 - 铁路以 12306 为准。`,
@@ -207,8 +243,19 @@ export async function buildRunDoneTravelOutput(
   toolLogs: ToolLogEntry[]
 ): Promise<RunDoneTravelOutput> {
   const citations = formatCitations(input.contextBundle?.ragChunks ?? []);
-  const fallback = () => {
-    const tripPlan = buildFallbackTripPlan(input, plan, toolLogs, citations || undefined);
+  const finalizePlan = async (tripPlan: TripPlanDocument): Promise<TripPlanDocument> => {
+    let enriched = enrichTripPlanWithToolData(tripPlan, toolLogs, input);
+    if (llm) {
+      enriched = await enrichTripPlanNarrativesWithLlm(llm, enriched, toolLogs, input);
+      enriched = enrichTripPlanWithToolData(enriched, toolLogs, input, { narrativeLocked: true });
+    }
+    return enriched;
+  };
+
+  const fallback = async () => {
+    const tripPlan = await finalizePlan(
+      buildFallbackTripPlan(input, plan, toolLogs, citations || undefined)
+    );
     return {
       chatReply:
         "已根据工具观测生成结构化行程，请在右侧查看按天安排、天气与路线摘要；细节可继续追问调整。",
@@ -223,7 +270,7 @@ export async function buildRunDoneTravelOutput(
     if (citations && !result.tripPlan.citations?.length) {
       result.tripPlan.citations = [citations];
     }
-    result.tripPlan = enrichTripPlanWithToolData(result.tripPlan, toolLogs, input);
+    result.tripPlan = await finalizePlan(result.tripPlan);
     return result;
   } catch {
     return fallback();

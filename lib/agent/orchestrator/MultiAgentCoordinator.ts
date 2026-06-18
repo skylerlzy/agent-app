@@ -7,10 +7,27 @@ import type {
   ITraceSink,
   ReasoningEvent,
   ILLMClient,
+  IToolRegistry,
 } from "../contracts";
 import { buildRunDoneTravelOutput, type ToolLogEntry } from "./finalTravelSummary";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { SessionEmitter } from "../runtime/SessionEmitter";
+import { ensurePlanMatchesDestination } from "../plan/planDestinationPreflight";
+import { ensureEssentialPlanSteps } from "../plan/ensureEssentialPlanSteps";
+import { supplementTripToolLogs } from "../tripPlan/supplementTripToolLogs";
+import { agentDebug } from "../debugLog";
+
+function canonicalizePlanStepIds(plan: ExecutionPlan): ExecutionPlan {
+  let k = 0;
+  const phases = plan.phases.map((ph) => ({
+    ...ph,
+    steps: (ph.steps ?? []).map((st) => {
+      k += 1;
+      return { ...st, id: `s${k}` };
+    }),
+  }));
+  return { planId: plan.planId, plannerRationale: plan.plannerRationale, phases };
+}
 
 function flattenSteps(plan: ExecutionPlan) {
   return plan.phases.flatMap((phase) => phase.steps ?? []);
@@ -30,7 +47,8 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
     private readonly planGenerator: IPlanGenerator,
     private readonly reactExecutor: IReactExecutor,
     private readonly traceSink?: ITraceSink,
-    private readonly summaryLlm?: ILLMClient
+    private readonly summaryLlm?: ILLMClient,
+    private readonly toolRegistry?: IToolRegistry
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<ReasoningEvent> {
@@ -55,7 +73,10 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
 
     let plan: ExecutionPlan;
     try {
-      plan = await this.planGenerator.draftPlan(input);
+      plan = canonicalizePlanStepIds(await this.planGenerator.draftPlan(input));
+      plan = canonicalizePlanStepIds(
+        await ensurePlanMatchesDestination(this.planGenerator, plan, input)
+      );
     } catch (error) {
       const msg = `Planner failed: ${errorMessage(error)}`;
       const err = emitter.emit({ type: "run_error", payload: { message: msg } });
@@ -69,10 +90,16 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
     await push(draft);
 
     try {
-      plan = await this.planGenerator.revisePlan(plan, "Multi-agent planner revision.");
+      plan = canonicalizePlanStepIds(
+        await this.planGenerator.revisePlan(plan, "Multi-agent planner revision.")
+      );
+      plan = canonicalizePlanStepIds(
+        await ensurePlanMatchesDestination(this.planGenerator, plan, input)
+      );
     } catch {
       /* 修订失败沿用初稿 */
     }
+    plan = canonicalizePlanStepIds(ensureEssentialPlanSteps(plan, input));
 
     const finalPlan = emitter.emit({ type: "plan_final", payload: { plan } });
     yield finalPlan;
@@ -95,6 +122,7 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
           step,
           context: input.context,
           goal: input.goal,
+          skillSystemSection: input.skillSystemSection,
         })) {
           yield event;
           await push(event);
@@ -122,7 +150,18 @@ export class MultiAgentCoordinator implements IMultiAgentCoordinator {
     yield handoff2;
     await push(handoff2);
 
-    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, toolLogs);
+    let finalToolLogs = toolLogs;
+    if (this.toolRegistry) {
+      const supplemented = await supplementTripToolLogs(this.toolRegistry, input, toolLogs);
+      finalToolLogs = supplemented.logs;
+      if (supplemented.supplemented.length > 0) {
+        agentDebug(
+          `[agent] supplemented ${supplemented.supplemented.length} food poi_search call(s) before summary`
+        );
+      }
+    }
+
+    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, finalToolLogs);
     const done = emitter.emit({
       type: "run_done",
       payload: {

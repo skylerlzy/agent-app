@@ -449,6 +449,7 @@ export interface IReactExecutor {
     step: PlanStep;
     context: UserContext;
     goal: UserGoal;
+    skillSystemSection?: string;
   }): AsyncIterable<ReasoningEvent>;
 }
 

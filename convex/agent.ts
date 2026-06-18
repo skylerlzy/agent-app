@@ -37,6 +37,7 @@ import {
   tripPlanToStorageJson,
   formatWorkingMemoryPlanText,
 } from "../lib/agent/context/tripPlanMemory";
+import { tripPlanMatchesPreferences } from "../lib/agent/tripPlan/tripContext";
 import {
   buildRagQuery,
   inferKnowledgeCityFromText,
@@ -194,11 +195,12 @@ async function enrichInputWithKnowledge(
 }> {
   const goalPreview = mergeGoalFromPreferences(userMessage, preferences);
   const ragCity =
-    goalPreview.slots?.destination ??
-    inferKnowledgeCityFromText(userMessage) ??
-    inferKnowledgeCityFromText(preferences.additionalNotes ?? "") ??
-    inferCityFromText(userMessage)?.replace(/市$/u, "") ??
-    undefined;
+    preferences.destination?.trim() ||
+    (goalPreview.slots?.destination ??
+      inferKnowledgeCityFromText(userMessage) ??
+      inferKnowledgeCityFromText(preferences.additionalNotes ?? "") ??
+      inferCityFromText(userMessage)?.replace(/市$/u, "") ??
+      undefined);
 
   const ragQuery = buildRagQuery({
     userMessage,
@@ -305,13 +307,22 @@ async function enrichInputWithSkills(
   input: AgentRunInput,
   userId: string
 ): Promise<AgentRunInput> {
-  const skillIds = input.activeSkillIds ?? [];
+  const skillIds = [...(input.activeSkillIds ?? [])];
+  const party = input.context.preferences.travelParty;
+
+  if (party === "couple" && !skillIds.includes("builtin:couple-romantic-travel")) {
+    skillIds.push("builtin:couple-romantic-travel");
+  }
+  if (party === "family" && !skillIds.includes("builtin:family-slow-travel")) {
+    skillIds.push("builtin:family-slow-travel");
+  }
+
   if (!skillIds.length) return input;
 
   const catalog = await ctx.runQuery(internal.skills.listForUserInternal, { userId });
   const registry = SkillRegistry.fromSkills(catalog);
   const skillSystemSection = await resolveSkillSystemSection(registry, skillIds);
-  return { ...input, skillSystemSection };
+  return { ...input, activeSkillIds: skillIds, skillSystemSection };
 }
 
 async function buildToolRegistryForRun(
@@ -513,7 +524,10 @@ async function runAgentInConversationHandler(
   });
 
   const storedPlan = tripPlanFromStorageJson(conversation.tripPlanStructuredJson);
-  const tripPlan = storedPlan;
+  const tripPlan =
+    storedPlan && tripPlanMatchesPreferences(storedPlan, args.preferences ?? {})
+      ? storedPlan
+      : undefined;
 
   if (tripPlan) {
     input.contextBundle = {

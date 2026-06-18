@@ -63,24 +63,26 @@ export function TripPlanThemesSection({
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className={cn("text-sm font-bold tracking-tight", accent.title)}>{theme.title}</h4>
-                <p className="mt-1.5 text-xs leading-relaxed text-foreground/88">{theme.description}</p>
+                <h4 className={cn("text-base font-bold tracking-tight", accent.title)}>{theme.title}</h4>
+                <p className="mt-1.5 text-sm leading-relaxed text-foreground/88">{theme.description}</p>
                 {theme.highlights && theme.highlights.length > 0 ? (
-                  <ul className="mt-2 space-y-1">
+                  <ul className="mt-2.5 space-y-2">
                     {theme.highlights.map((h) => (
-                      <li key={h} className="flex gap-1.5 text-[11px] leading-snug text-muted-foreground">
-                        <span className={cn("mt-1.5 h-1 w-1 shrink-0 rounded-full", accent.dot)} />
-                        <span>{h}</span>
+                      <li
+                        key={h}
+                        className="rounded-lg border border-border/40 bg-muted/20 px-2.5 py-2 text-sm leading-relaxed text-foreground/90"
+                      >
+                        {h}
                       </li>
                     ))}
                   </ul>
                 ) : null}
                 {places.length > 0 ? (
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {places.map((place) => (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {[...new Set(places)].map((place) => (
                       <span
                         key={place}
-                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-[10px] font-medium text-primary"
+                        className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/8 px-2 py-0.5 text-xs font-medium text-primary"
                       >
                         <MapPin className="h-2.5 w-2.5" />
                         {place}

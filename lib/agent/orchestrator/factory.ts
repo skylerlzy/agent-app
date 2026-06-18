@@ -57,8 +57,8 @@ export function createAutonomousAgentPipeline(
   const react = new ReactExecutor(llmClient, registry, reflexion, 5);
 
   const full = multiAgentCoordinatorEnabled()
-    ? new MultiAgentCoordinator(planGenerator, react, traceSink, llmClient)
-    : new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient);
+    ? new MultiAgentCoordinator(planGenerator, react, traceSink, llmClient, registry)
+    : new PlanExecuteOrchestrator(planGenerator, react, traceSink, llmClient, registry);
 
   const quick = new LightweightWorkflow(llmClient, registry, traceSink);
   const incremental = new IncrementalReviseWorkflow(llmClient, traceSink);

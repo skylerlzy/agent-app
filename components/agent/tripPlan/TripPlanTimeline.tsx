@@ -19,7 +19,7 @@ function ActivityBlock({
   if (!items.length) return null;
   return (
     <div className="space-y-2">
-      <div className={cn("flex items-center gap-1.5 text-xs font-semibold", tone)}>
+      <div className={cn("flex items-center gap-1.5 text-sm font-semibold", tone)}>
         {icon}
         {heading}
       </div>
@@ -27,10 +27,10 @@ function ActivityBlock({
         {items.map((a, i) => (
           <li
             key={`${a.itineraryItem}-${i}`}
-            className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2.5 text-sm shadow-sm transition hover:border-primary/25 hover:bg-primary/5"
+            className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2.5 text-base shadow-sm transition hover:border-primary/25 hover:bg-primary/5"
           >
             <p className="font-semibold text-foreground">{a.itineraryItem}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{a.briefDescription}</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{a.briefDescription}</p>
           </li>
         ))}
       </ul>
@@ -45,7 +45,7 @@ export function TripPlanTimeline({ itinerary }: { itinerary: TripPlanDay[] }) {
   });
 
   if (!filtered.length) {
-    return <p className="text-sm text-muted-foreground">暂无按日行程安排。</p>;
+    return <p className="text-base text-muted-foreground">暂无按日行程安排。</p>;
   }
 
   return (
@@ -58,8 +58,8 @@ export function TripPlanTimeline({ itinerary }: { itinerary: TripPlanDay[] }) {
             </span>
             <div className="min-w-0 flex-1 space-y-3">
               <div>
-                <h4 className="text-sm font-bold text-emerald-900">{day.title}</h4>
-                {day.dateIso ? <p className="text-[11px] text-muted-foreground">{day.dateIso}</p> : null}
+                <h4 className="text-base font-bold text-emerald-900">{day.title}</h4>
+                {day.dateIso ? <p className="text-xs text-muted-foreground">{day.dateIso}</p> : null}
               </div>
               <div className="space-y-4 border-l-2 border-emerald-100/90 pl-3">
                 <ActivityBlock

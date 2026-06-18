@@ -2,6 +2,7 @@
 
 import { FoodRecommendationCard } from "@/components/agent/tripPlan/FoodRecommendationCard";
 import { TripPlanMap } from "@/components/agent/tripPlan/TripPlanMap";
+import { TripPlanSkillMomentsSection } from "@/components/agent/tripPlan/TripPlanSkillMomentsSection";
 import { TripPlanThemesSection } from "@/components/agent/tripPlan/TripPlanThemesSection";
 import { TripPlanTransportSection } from "@/components/agent/tripPlan/TripPlanTransportSection";
 import { TripPlanTimeline } from "@/components/agent/tripPlan/TripPlanTimeline";
@@ -44,7 +45,7 @@ function SectionCard({
       )}
     >
       <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-90", accent.stripe)} />
-      <h3 className={cn("mb-2.5 flex items-center gap-2 text-sm font-bold", accent.title)}>
+      <h3 className={cn("mb-2.5 flex items-center gap-2 text-base font-bold", accent.title)}>
         <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-lg bg-background/70", accent.title)}>
           {icon}
         </span>
@@ -133,7 +134,7 @@ export function StructuredTripPlanView({
       : []);
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-4 text-[15px] leading-relaxed", className)}>
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-voyage-sky/10 to-voyage-amber/8 p-5 shadow-md">
         {isUpdating ? (
           <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-background/80 px-2 py-1 text-[10px] text-primary">
@@ -142,11 +143,11 @@ export function StructuredTripPlanView({
           </div>
         ) : null}
         <p className="text-[10px] font-semibold uppercase tracking-widest text-primary/80">全程出行方案</p>
-        <h2 className="mt-1 text-xl font-bold tracking-tight text-foreground">{route}</h2>
-        {dateLabel ? <p className="mt-1 text-sm text-muted-foreground">{dateLabel}</p> : null}
-        <p className="mt-3 text-sm leading-relaxed text-foreground/90">{plan.overview}</p>
+        <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">{route}</h2>
+        {dateLabel ? <p className="mt-1 text-base text-muted-foreground">{dateLabel}</p> : null}
+        <p className="mt-3 text-base leading-relaxed text-foreground/90">{plan.overview}</p>
         {plan.citations && plan.citations.length > 0 ? (
-          <div className="mt-3 rounded-lg border border-violet-500/15 bg-violet-500/5 px-2.5 py-2 text-[11px] text-violet-900">
+          <div className="mt-3 rounded-lg border border-violet-500/15 bg-violet-500/5 px-2.5 py-2 text-xs text-violet-900">
             {plan.citations.map((c) => (
               <p key={c}>{c}</p>
             ))}
@@ -158,6 +159,7 @@ export function StructuredTripPlanView({
         <TripPlanWeatherSection
           dailyWeather={plan.dailyWeather}
           weatherAdvice={plan.weatherAdvice ?? plan.weatherTips}
+          weatherAdviceItems={plan.weatherAdviceItems}
           legacyText={plan.weatherTips}
         />
       </SectionCard>
@@ -180,6 +182,20 @@ export function StructuredTripPlanView({
         </SectionCard>
       ) : null}
 
+      {plan.skillMoments && plan.skillMoments.length > 0 ? (
+        <SectionCard
+          title={
+            plan.skillMoments[0]?.title.includes("情侣") || plan.skillMoments[0]?.title.includes("浪漫")
+              ? "情侣浪漫时刻"
+              : "专属体验高光"
+          }
+          icon={<Sparkles className="h-4 w-4" />}
+          accentIndex={0}
+        >
+          <TripPlanSkillMomentsSection moments={plan.skillMoments} />
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="日程安排" icon={<MapPinned className="h-4 w-4" />} accentIndex={3}>
         <TripPlanTimeline itinerary={plan.itinerary} />
       </SectionCard>
@@ -194,7 +210,7 @@ export function StructuredTripPlanView({
                     type="button"
                     onClick={() => setSelectedPlace(p)}
                     className={cn(
-                      "flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left text-sm transition",
+                      "flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left text-base transition",
                       selectedPlace?.name === p.name
                         ? "border-primary/35 bg-primary/10"
                         : "border-border/50 hover:border-voyage-sky/35 hover:bg-voyage-sky/5"
@@ -209,7 +225,7 @@ export function StructuredTripPlanView({
               ))}
             </ol>
           ) : (
-            <p className="mb-4 text-xs text-muted-foreground">
+            <p className="mb-4 text-sm text-muted-foreground">
               本轮方案尚未解析到景点坐标；完成含路线/POI 工具的规划后将在此显示列表与地图。
             </p>
           )}
@@ -224,7 +240,7 @@ export function StructuredTripPlanView({
                 />
               </MapProvider>
             ) : (
-              <div className="flex h-full min-h-[14rem] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 text-center text-xs text-muted-foreground">
+              <div className="flex h-full min-h-[14rem] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/20 px-4 text-center text-sm text-muted-foreground">
                 暂无坐标数据。请确认已配置高德 JS API Key，并重新生成含路线工具的行程。
               </div>
             )}
@@ -234,7 +250,7 @@ export function StructuredTripPlanView({
 
       <SectionCard title="饮食与预算" icon={<Utensils className="h-4 w-4" />} accentIndex={5}>
         {foodSummary ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{foodSummary}</p>
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">{foodSummary}</p>
         ) : null}
         {foodItems.length > 0 ? (
           <div className={cn("grid gap-3 sm:grid-cols-2", foodSummary ? "mt-4" : "")}>
@@ -243,13 +259,15 @@ export function StructuredTripPlanView({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">暂无美食推荐，可在对话中补充饮食偏好后重新生成。</p>
+          <p className="text-base text-muted-foreground">
+            正在加载美食推荐…若仍为空请重新生成行程（系统会为每个目的地提供默认可选餐厅）。
+          </p>
         )}
       </SectionCard>
 
       {plan.packingChecklist && plan.packingChecklist.length > 0 ? (
         <SectionCard title="行李清单" icon={<Backpack className="h-4 w-4" />} accentIndex={2}>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/90">
+          <ul className="list-disc space-y-1 pl-5 text-base text-foreground/90">
             {plan.packingChecklist.map((item) => (
               <li key={item}>{item}</li>
             ))}

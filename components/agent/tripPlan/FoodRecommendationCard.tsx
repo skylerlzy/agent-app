@@ -51,8 +51,8 @@ export function FoodRecommendationCard({
         </div>
       </div>
       <div className="space-y-1 p-3">
-        <h4 className="text-sm font-bold text-foreground">{item.name}</h4>
-        <p className="text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+        <h4 className="text-base font-bold text-foreground">{item.name}</h4>
+        <p className="text-sm leading-relaxed text-muted-foreground">{item.description}</p>
       </div>
     </article>
   );

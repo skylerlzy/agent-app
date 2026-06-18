@@ -10,7 +10,7 @@ export async function summarizeRevisionChanges(
     revisedPlan: string;
   }
 ): Promise<string> {
-  const system = `你是出行助手。用户要求局部修订行程，右侧已更新完整方案。请用 2～5 句中文在**对话框**里说明本次具体改了什么（涉及哪一天、增删/调整了哪些景点或活动、节奏/预算变化等）。不要粘贴完整行程，不要只说「已更新」。
+  const system = `你是出行助手。用户要求局部修订行程，右侧 itinerary 已更新。请对比修订前后的 itinerary JSON，用 2～5 句中文说明**实际发生的**改动（哪一天、哪个时段、从什么改为什么）。不要粘贴完整 JSON，不要只说「已更新」。
 
 只输出 JSON：{"chatReply":"..."}`;
 

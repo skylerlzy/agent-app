@@ -6,12 +6,16 @@ import type {
   IPlanGenerator,
   IReactExecutor,
   ITraceSink,
+  IToolRegistry,
   ReasoningEvent,
 } from "../contracts";
 import { buildRunDoneTravelOutput, type ToolLogEntry } from "./finalTravelSummary";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { agentDebug } from "../debugLog";
 import { SessionEmitter } from "../runtime/SessionEmitter";
+import { ensurePlanMatchesDestination } from "../plan/planDestinationPreflight";
+import { ensureEssentialPlanSteps } from "../plan/ensureEssentialPlanSteps";
+import { supplementTripToolLogs } from "../tripPlan/supplementTripToolLogs";
 
 function flattenSteps(plan: ExecutionPlan) {
   return plan.phases.flatMap((phase) => phase.steps ?? []);
@@ -57,7 +61,8 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     private readonly reactExecutor: IReactExecutor,
     private readonly traceSink?: ITraceSink,
     /** 用于跑完全部步骤后生成「旅行稿」式 Markdown 总结（与示例项目最终输出对齐） */
-    private readonly summaryLlm?: ILLMClient
+    private readonly summaryLlm?: ILLMClient,
+    private readonly toolRegistry?: IToolRegistry
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<ReasoningEvent> {
@@ -85,6 +90,8 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     let plan: ExecutionPlan;
     try {
       plan = canonicalizePlanStepIds(await this.planGenerator.draftPlan(input));
+      plan = canonicalizePlanStepIds(await ensurePlanMatchesDestination(this.planGenerator, plan, input));
+      plan = canonicalizePlanStepIds(ensureEssentialPlanSteps(plan, input));
     } catch (error) {
       const msg = `Failed to draft plan: ${errorMessage(error)}`;
       const errorEvent = emitter.emit({
@@ -122,6 +129,10 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
             "Initial runtime revision before step execution."
           )
         );
+        plan = canonicalizePlanStepIds(
+          await ensurePlanMatchesDestination(this.planGenerator, plan, input)
+        );
+        plan = canonicalizePlanStepIds(ensureEssentialPlanSteps(plan, input));
       } catch (error) {
         const raw = errorMessage(error);
         if (isRevisePlanRecoverableFailure(raw)) {
@@ -163,6 +174,7 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
           step,
           context: input.context,
           goal: input.goal,
+          skillSystemSection: input.skillSystemSection,
         })) {
           yield event;
           await push(event);
@@ -190,7 +202,18 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
       }
     }
 
-    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, toolLogs);
+    let finalToolLogs = toolLogs;
+    if (this.toolRegistry) {
+      const supplemented = await supplementTripToolLogs(this.toolRegistry, input, toolLogs);
+      finalToolLogs = supplemented.logs;
+      if (supplemented.supplemented.length > 0) {
+        agentDebug(
+          `[agent] supplemented ${supplemented.supplemented.length} food poi_search call(s) before summary`
+        );
+      }
+    }
+
+    const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, finalToolLogs);
 
     const doneEvent = emitter.emit({
       type: "run_done",

@@ -50,6 +50,27 @@ const foodRecommendationSchema = z.object({
   imageUrl: z.string().optional(),
 });
 
+const skillMomentSchema = z.object({
+  dayLabel: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  tips: z.array(z.string()).optional(),
+});
+
+const railOptionSchema = z.object({
+  trainNo: z.string().min(1),
+  trainType: z.string().optional(),
+  departStation: z.string().min(1),
+  arriveStation: z.string().min(1),
+  departureTime: z.string().min(1),
+  arrivalTime: z.string().min(1),
+  duration: z.string().min(1),
+  priceSecond: z.string().optional(),
+  priceFirst: z.string().optional(),
+  seatsAvailable: z.string().optional(),
+  tag: z.enum(["最快", "推荐", "经济"]).optional(),
+});
+
 const transportSegmentSchema = z.object({
   category: z.enum(["intercity", "local"]),
   origin: z.string().min(1),
@@ -58,6 +79,9 @@ const transportSegmentSchema = z.object({
   durationMinutes: z.number().optional(),
   mode: z.string().optional(),
   recommendation: z.string().min(1),
+  railOptions: z.array(railOptionSchema).optional(),
+  queryDateIso: z.string().optional(),
+  totalTrains: z.number().optional(),
 });
 
 export const tripPlanDocumentSchema = z.object({
@@ -75,6 +99,7 @@ export const tripPlanDocumentSchema = z.object({
   weatherTips: z.string().min(1),
   dailyWeather: z.array(dailyWeatherSchema).optional(),
   weatherAdvice: z.string().optional(),
+  weatherAdviceItems: z.array(z.string()).optional(),
   transport: z.string().min(1),
   transportSegments: z.array(transportSegmentSchema).optional(),
   themesAndPlaces: z.array(z.string()).default([]),
@@ -87,6 +112,7 @@ export const tripPlanDocumentSchema = z.object({
   adventuresActivities: z.array(z.string()).optional(),
   localCuisine: z.array(z.string()).optional(),
   foodRecommendations: z.array(foodRecommendationSchema).optional(),
+  skillMoments: z.array(skillMomentSchema).optional(),
   packingChecklist: z.array(z.string()).optional(),
 });
 

@@ -42,15 +42,11 @@ export function isGenericIncrementalChatReply(chatReply: string): boolean {
   return false;
 }
 
-/** LLM 未按 JSON 输出时的降级 */
+/** LLM 未按 JSON 输出时的降级：不再用规则引擎，由上层触发重试或报错 */
 export function fallbackIncrementalReviseOutput(
   _raw: string,
-  userRequest: string,
-  baseline: TripPlanDocument | null
+  _userRequest: string,
+  _baseline: TripPlanDocument | null
 ): IncrementalReviseOutput | null {
-  if (!baseline || !isValidTripPlan(baseline)) return null;
-  return {
-    chatReply: `已记录您的修订要求「${userRequest.trim().slice(0, 48)}」。请查看右侧方案；若未看到变动，请再具体说明要改哪一天。`,
-    tripPlanStructured: baseline,
-  };
+  return null;
 }
