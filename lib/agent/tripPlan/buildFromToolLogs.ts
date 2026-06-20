@@ -54,7 +54,8 @@ const NON_ATTRACTION_NAME =
   /酒店|停车场|交叉口|辅路|公厕|便利店|咖啡\(|便民服务|营地$|检票|售票|出口|入口|地铁站|公交站|服务|办公|观礼台|国旗|地下停车/;
 const SUB_VENUE_SUFFIX =
   /(午门|端门|神武门|东华门|检票|售票|停车|出口|入口|地铁站|公交站|服务|办公|观礼台|国旗|角楼|西南角|东北角|西门|东门|南门|北门|城墙|内$|外$|领票|文创|剧场|A区|B区|C区|D区|E区|F区|北区|南区|东区|西区|地下|卡口)/;
-const ARRIVAL_CLUSTER = /天安门|故宫|前门|王府井|大栅栏|北京坊/;
+const ARRIVAL_CLUSTER =
+  /天安门|故宫|前门|王府井|大栅栏|北京坊|情侣路|珠海渔女|拱北|野狸岛|香炉湾|海滨泳场|渔女|日月贝/;
 const INDOOR_KEYWORDS = /博物馆|美术馆|艺术区|商场|太古里|坊|图书馆/;
 
 /** 归一化景区主名，用于去重（如「故宫博物院-午门」→「故宫博物院」） */
@@ -478,16 +479,30 @@ function formatRailRecommendationText(
   ].join("\n");
 }
 
+function railLogNeedsReferenceData(data: Record<string, unknown>, trainCount: number): boolean {
+  if (trainCount > 0 && data.degraded !== true && data.apiUnavailable !== true) return false;
+  return trainCount === 0 || data.degraded === true || data.apiUnavailable === true;
+}
+
 function parseRailSegment(data: Record<string, unknown>): TripPlanTransportSegment | null {
   const origin = typeof data.originCity === "string" ? data.originCity : "";
   const dest = typeof data.destinationCity === "string" ? data.destinationCity : "";
   if (!origin || !dest) return null;
 
+  const dateIso =
+    (typeof data.dateIso === "string" && data.dateIso) ||
+    (typeof data.queryDate === "string" && data.queryDate) ||
+    "";
+
   const rawTrains = Array.isArray(data.trains) ? data.trains : [];
   const trains = rawTrains
     .map(parseTrainRecord)
     .filter((t): t is ParsedTrain => t != null);
-  const dateIso = typeof data.dateIso === "string" ? data.dateIso : "";
+
+  if (railLogNeedsReferenceData(data, trains.length)) {
+    return buildSampleRailTransportSegment(origin, dest, dateIso || undefined);
+  }
+
   const total = typeof data.total === "number" ? data.total : trains.length;
 
   const { options, recommendedDurationMinutes } = curateRailOptions(trains);
@@ -549,6 +564,16 @@ export function buildTransportBundleFromToolLogs(
       opts?.tripStart
     );
     if (fallback) segments.push(fallback);
+  }
+
+  for (let i = 0; i < segments.length; i += 1) {
+    const seg = segments[i];
+    if (seg.category !== "intercity" || (seg.railOptions?.length ?? 0) > 0) continue;
+    segments[i] = buildSampleRailTransportSegment(
+      seg.origin,
+      seg.destination,
+      seg.queryDateIso
+    );
   }
 
   if (segments.length === 0) {

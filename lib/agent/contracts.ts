@@ -512,6 +512,10 @@ export interface ChatMessage {
 /** LLM 调用可选参数（Convex 日志排障用 requestLabel） */
 export interface LLMCompletionOptions {
   temperature?: number;
+  /** 限制生成长度，缩短收尾润色耗时 */
+  maxTokens?: number;
+  /** 单次请求超时（毫秒）；未设则用 LLM_HTTP_TIMEOUT_MS */
+  timeoutMs?: number;
   /** 标识场景，如 plan_draft / plan_revise / react:s1:turn0 */
   requestLabel?: string;
 }

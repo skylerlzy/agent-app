@@ -1,0 +1,215 @@
+{
+  "version": "iter3-platform-v1",
+  "description": "迭代三评估数据集 → agent-eval-platform 可导入任务清单。每条任务对应平台字段：name / agentVersion / dataset（Judge 参考）/ evalGoal / evalPayload（传给 agent-app）。",
+  "agentVersionDefault": "iter3",
+  "defaultMethods": ["llm_judge", "explicit"],
+  "defaultDimensions": ["effectiveness", "performance"],
+  "tasks": [
+    {
+      "caseId": "T-01",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-01] 跨城枢纽公交应走铁路而非 maps",
+      "evalGoal": "规划南京到上海的跨城行程，估算南京南站到上海虹桥高铁枢纽间的公交耗时",
+      "dataset": "参考验收：trace 应调用 rail_schedule_hint；跨城枢纽间 transit 须被 maps_route_estimate 校验拒绝（不出现合法 maps 跨城 transit 调用）。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "T-02",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-02] 空 city 天气查询前置拦截",
+      "evalGoal": "查一下  的天气",
+      "dataset": "参考验收：weather_forecast 参数校验失败（WEATHER_CITY_REQUIRED），不应发起无效 GeoAPI 请求；回答应提示补充城市。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "T-03",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-03] 南京 POI + 天气工具链",
+      "evalGoal": "规划南京 2 日游，第二天上午想去中山陵附近",
+      "dataset": "参考验收：trace 含 poi_search 与 weather_forecast；POI 结果可被后续行程引用。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "T-04",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-04] MT-6 关闭 weather 工具",
+      "evalGoal": "规划深圳 3 日游，每天天气如何",
+      "dataset": "参考验收：enabledToolNames 未含 weather_forecast 时 trace 不得出现 weather_forecast 工具调用；仍可完成行程规划。",
+      "evalPayload": {
+        "enabledToolNames": ["maps_route_estimate", "poi_search", "rail_schedule_hint"]
+      }
+    },
+    {
+      "caseId": "T-05",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-05] 同城 POI 步行路线",
+      "evalGoal": "从杭州东站到西湖步行路线",
+      "dataset": "参考验收：trace 含 maps_route_estimate；origin/destination 为同城具体 POI。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "T-06",
+      "sourceDataset": "iter3-tools-correctness.json",
+      "automation": "platform",
+      "name": "[T-06] 高铁参考须含 12306 免责声明",
+      "evalGoal": "北京到上海 2026-07-01 出行，高铁有什么注意事项",
+      "dataset": "参考验收：调用 rail_schedule_hint；输出须说明非实时时刻/须以 12306 为准（样例或 API 结果均需免责声明）。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "RM-01",
+      "sourceDataset": "iter3-runmode-routing.json",
+      "automation": "platform",
+      "name": "[RM-01] 新规划走 full_plan_execute",
+      "evalGoal": "规划南京 3 日游，预算 3000",
+      "dataset": "参考验收：runMode=full_plan_execute；trace 含 plan_draft、tool_call、run_done。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "RM-02",
+      "sourceDataset": "iter3-runmode-routing.json",
+      "automation": "platform",
+      "name": "[RM-02] 局部修订走 incremental_revise",
+      "evalGoal": "【已有行程】南京 3 日游：Day1 中山陵+明孝陵，Day2 夫子庙+老门东，Day3 南京博物院。【修订请求】第二天改成慢节奏，少安排 2 个景点。",
+      "dataset": "参考验收：runMode=incremental_revise；trace 不应出现 plan_draft；Day2 景点减少且 Day1 不被全量重写。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "RM-03",
+      "sourceDataset": "iter3-runmode-routing.json",
+      "automation": "platform",
+      "name": "[RM-03] 预算修订走 incremental_revise",
+      "evalGoal": "【已有行程】南京 3 日游总预算约 3000 元。【修订请求】预算降到 2000，调整餐饮与交通建议。",
+      "dataset": "参考验收：runMode=incremental_revise；输出体现预算下调后的合理调整。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "RM-04",
+      "sourceDataset": "iter3-runmode-routing.json",
+      "automation": "platform",
+      "name": "[RM-04] 简单天气走 quick_reply",
+      "evalGoal": "南京天气怎么样",
+      "dataset": "参考验收：runMode=quick_reply；工具调用 0～1 次且主要为 weather_forecast；latency 明显低于全量规划。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "RM-05",
+      "sourceDataset": "iter3-runmode-routing.json",
+      "automation": "platform",
+      "name": "[RM-05] 复述行程走 quick_reply",
+      "evalGoal": "【已有行程】Day2：上午中山陵，下午夫子庙，晚上老门东。【请求】帮我复述一下 Day2 的安排",
+      "dataset": "参考验收：runMode=quick_reply；直接复述 Day2 内容，trace 无 plan_draft。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "TG-01",
+      "sourceDataset": "iter3-trip-generation.json",
+      "automation": "platform",
+      "name": "[TG-01] 情侣南京游 Skill + 交通兜底",
+      "evalGoal": "帮我安排吧 南京",
+      "dataset": "参考验收：① transport 含跨城铁路参考，API 失败时须样例车次+12306 说明；② themeHighlights 数量=3（与 6/24～6/26 天数一致）；③ foodRecommendations 至少 3 条真实店名（poi_search）；④ 体现 couple-romantic-travel（skillMoments 或浪漫时段）；⑤ 中山陵 briefDescription 不得与玄武湖模板雷同。",
+      "evalPayload": {
+        "preferences": {
+          "originCity": "珠海",
+          "destination": "南京",
+          "tripStartDateIso": "2026-06-24",
+          "tripEndDateIso": "2026-06-26",
+          "travelParty": "couple"
+        },
+        "activeSkillIds": ["builtin:couple-romantic-travel"]
+      }
+    },
+    {
+      "caseId": "TG-02",
+      "sourceDataset": "iter3-trip-generation.json",
+      "automation": "platform",
+      "name": "[TG-02] 北京慢节奏 3 日主题天数",
+      "evalGoal": "规划北京 3 日游，慢节奏",
+      "dataset": "参考验收：itinerary 每天主景点不重复；themeHighlights 数量=3；dailyWeather 日期在 tripStart～tripEnd 内。",
+      "evalPayload": {
+        "preferences": {
+          "destination": "北京",
+          "tripStartDateIso": "2026-07-01",
+          "tripEndDateIso": "2026-07-03",
+          "pace": "slow"
+        }
+      }
+    },
+    {
+      "caseId": "TG-03",
+      "sourceDataset": "iter3-trip-generation.json",
+      "automation": "platform",
+      "name": "[TG-03] 中山陵 POI 检索与主 POI",
+      "evalGoal": "规划南京 2 日游，第二天上午想去中山陵",
+      "dataset": "参考验收：trace 含 poi_search；topPlacesToVisit 含中山陵相关主 POI（非子门/停车场）。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "TG-04",
+      "sourceDataset": "iter3-trip-generation.json",
+      "automation": "platform",
+      "name": "[TG-04] 亲子 Skill 行程",
+      "evalGoal": "帮我规划上海 2 日亲子游，孩子 6 岁",
+      "dataset": "参考验收：travelParty=family 或 family-slow-travel Skill 生效；行程含亲子友好节奏与休息留白；themeHighlights 数量=2。",
+      "evalPayload": {
+        "preferences": {
+          "destination": "上海",
+          "tripStartDateIso": "2026-08-01",
+          "tripEndDateIso": "2026-08-02",
+          "travelParty": "family",
+          "pace": "slow"
+        },
+        "activeSkillIds": ["builtin:family-slow-travel"]
+      }
+    },
+    {
+      "caseId": "TG-05",
+      "sourceDataset": "iter3-trip-generation.json",
+      "automation": "platform",
+      "name": "[TG-05] 跨城铁路 + 目的地规划",
+      "evalGoal": "从广州去成都玩 4 天，帮我规划",
+      "dataset": "参考验收：transport 含广州→成都铁路/航班参考；itinerary 覆盖 4 天；themeHighlights 数量=4。",
+      "evalPayload": {
+        "preferences": {
+          "originCity": "广州",
+          "destination": "成都",
+          "tripStartDateIso": "2026-09-10",
+          "tripEndDateIso": "2026-09-13",
+          "pace": "balanced"
+        }
+      }
+    },
+    {
+      "caseId": "memory-cross-dialogue-spicy",
+      "sourceDataset": "iter3-rag-cross-memory.json",
+      "automation": "manual",
+      "name": "[手工] 跨对话记忆：不吃辣",
+      "evalGoal": "推荐南京适合晚餐的本地美食。",
+      "dataset": "手工前置：① 对话 A 发送「我不吃辣…」并确认 /settings/memory 有约束；② 新建对话 B 并开启共享长期记忆；③ 再运行本 evalGoal。期望：避开辣味并体现读取记忆。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "memory-share-disabled",
+      "sourceDataset": "iter3-rag-cross-memory.json",
+      "automation": "manual",
+      "name": "[手工] 关闭共享记忆后不引用",
+      "evalGoal": "推荐南京适合晚餐的本地美食。",
+      "dataset": "手工前置：沿用上一用例记忆；新建对话 C 并关闭共享长期记忆。期望：不应显式引用对话 A 的不吃辣记忆。",
+      "evalPayload": {}
+    },
+    {
+      "caseId": "rag-citation-nanjing-guide",
+      "sourceDataset": "iter3-rag-cross-memory.json",
+      "automation": "manual",
+      "name": "[手工] RAG 出处标注",
+      "evalGoal": "南京三日慢游有什么适合晚上安排的地点？",
+      "dataset": "手工前置：在 /settings/knowledge 上传标题「南京慢游攻略」含老门东/夫子庙/博物院预约；检索预览可召回。期望：回答含攻略地点且带 [来源: 南京慢游攻略 · 第 N 段]。",
+      "evalPayload": {}
+    }
+  ]
+}

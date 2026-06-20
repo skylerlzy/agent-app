@@ -80,8 +80,13 @@ export class OpenAICompatibleClient implements ILLMClient {
   /**
    * 对 429 做指数退避 + 抖动重试（单次 Agent 会连续调用 plan / revise / 多步 ReAct，易触发 DashScope 限流）。
    */
-  private async postChatCompletions(body: object, label: string): Promise<Response> {
+  private async postChatCompletions(
+    body: object,
+    label: string,
+    timeoutMs?: number
+  ): Promise<Response> {
     const { maxRetries, baseMs, capMs } = read429RetryConfig();
+    const effectiveTimeout = timeoutMs ?? this.timeoutMs;
 
     await sleepUntilLlmGap();
     try {
@@ -96,7 +101,7 @@ export class OpenAICompatibleClient implements ILLMClient {
             },
             body: JSON.stringify(body),
           },
-          this.timeoutMs,
+          effectiveTimeout,
           `${label}: LLM 请求超时；可调大 Convex 环境变量 LLM_HTTP_TIMEOUT_MS`,
           `dashscope:${label}`
         );
@@ -141,14 +146,15 @@ export class OpenAICompatibleClient implements ILLMClient {
   async complete(messages: ChatMessage[], options?: LLMCompletionOptions): Promise<string> {
     const label = options?.requestLabel ?? "llm_complete";
     agentDebug(`[agent-llm] → ${label} model=${this.cfg.model} (chat/completions)`);
-    const response = await this.postChatCompletions(
-      {
-        model: this.cfg.model,
-        messages,
-        temperature: options?.temperature ?? 0.7,
-      },
-      label
-    );
+    const body: Record<string, unknown> = {
+      model: this.cfg.model,
+      messages,
+      temperature: options?.temperature ?? 0.7,
+    };
+    if (options?.maxTokens != null && options.maxTokens > 0) {
+      body.max_tokens = options.maxTokens;
+    }
+    const response = await this.postChatCompletions(body, label, options?.timeoutMs);
 
     if (!response.ok) {
       let detail = response.statusText;

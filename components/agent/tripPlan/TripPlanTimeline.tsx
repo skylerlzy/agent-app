@@ -19,7 +19,7 @@ function ActivityBlock({
   if (!items.length) return null;
   return (
     <div className="space-y-2">
-      <div className={cn("flex items-center gap-1.5 text-sm font-semibold", tone)}>
+      <div className={cn("flex items-center gap-1.5 text-base font-semibold", tone)}>
         {icon}
         {heading}
       </div>
@@ -27,10 +27,10 @@ function ActivityBlock({
         {items.map((a, i) => (
           <li
             key={`${a.itineraryItem}-${i}`}
-            className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2.5 text-base shadow-sm transition hover:border-primary/25 hover:bg-primary/5"
+            className="rounded-xl border border-border/50 bg-muted/25 px-3.5 py-3 text-base shadow-sm transition hover:border-primary/25 hover:bg-primary/5 sm:text-[17px]"
           >
-            <p className="font-semibold text-foreground">{a.itineraryItem}</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{a.briefDescription}</p>
+            <p className="text-lg font-semibold text-foreground">{a.itineraryItem}</p>
+            <p className="mt-1.5 text-base leading-relaxed text-muted-foreground sm:text-[17px] sm:leading-7">{a.briefDescription}</p>
           </li>
         ))}
       </ul>
@@ -58,8 +58,8 @@ export function TripPlanTimeline({ itinerary }: { itinerary: TripPlanDay[] }) {
             </span>
             <div className="min-w-0 flex-1 space-y-3">
               <div>
-                <h4 className="text-base font-bold text-emerald-900">{day.title}</h4>
-                {day.dateIso ? <p className="text-xs text-muted-foreground">{day.dateIso}</p> : null}
+                <h4 className="text-lg font-bold text-emerald-900 sm:text-xl">{day.title}</h4>
+                {day.dateIso ? <p className="text-sm text-muted-foreground sm:text-base">{day.dateIso}</p> : null}
               </div>
               <div className="space-y-4 border-l-2 border-emerald-100/90 pl-3">
                 <ActivityBlock

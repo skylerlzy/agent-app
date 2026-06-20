@@ -9,6 +9,41 @@ const DEFAULT_HOST = "https://jisutrainf.market.alicloudapi.com";
 const DEFAULT_TICKET_PATH = "/train/ticket";
 const DEFAULT_STATION2S_PATH = "/train/station2s";
 const MAX_TRAINS = 15;
+const RETRYABLE_HTTP_STATUSES = new Set([429, 502, 503, 504]);
+
+/** 城市名 → 高铁主站（提升命中率、减轻余票接口压力） */
+const CITY_TO_RAIL_STATION: Record<string, string> = {
+  北京: "北京南",
+  上海: "上海虹桥",
+  广州: "广州南",
+  深圳: "深圳北",
+  杭州: "杭州东",
+  南京: "南京南",
+  武汉: "武汉",
+  成都: "成都东",
+  重庆: "重庆北",
+  西安: "西安北",
+  天津: "天津西",
+  苏州: "苏州北",
+  长沙: "长沙南",
+  郑州: "郑州东",
+  青岛: "青岛北",
+  厦门: "厦门北",
+  福州: "福州",
+  合肥: "合肥南",
+  南昌: "南昌西",
+  昆明: "昆明南",
+  贵阳: "贵阳北",
+  南宁: "南宁东",
+  大连: "大连北",
+  沈阳: "沈阳北",
+  哈尔滨: "哈尔滨西",
+  石家庄: "石家庄",
+  太原: "太原南",
+  济南: "济南西",
+  兰州: "兰州西",
+  珠海: "珠海",
+};
 
 export type AliyunRailQueryInput = {
   start: string;
@@ -48,10 +83,44 @@ export type AliyunRailQueryResult = {
 type JisuTrainRow = Record<string, unknown>;
 
 function toolHttpTimeoutMs(): number {
+  const railRaw = process.env.RAIL_HTTP_TIMEOUT_MS;
+  if (railRaw !== undefined && railRaw !== "") {
+    const railN = Number(railRaw);
+    if (Number.isFinite(railN) && railN >= 3_000) return railN;
+  }
   const raw = process.env.TOOL_HTTP_TIMEOUT_MS;
-  if (raw === undefined || raw === "") return 45_000;
+  if (raw === undefined || raw === "") return 22_000;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 3_000 ? n : 45_000;
+  return Number.isFinite(n) && n >= 3_000 ? Math.min(n, 30_000) : 22_000;
+}
+
+function railHttpMaxRetries(): number {
+  const raw = process.env.RAIL_HTTP_MAX_RETRIES;
+  if (raw === undefined || raw === "") return 2;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.min(4, Math.floor(n)) : 2;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryBackoffMs(attempt: number): number {
+  const base = Math.max(400, Number(process.env.RAIL_HTTP_RETRY_BASE_MS ?? "800"));
+  return Math.min(6_000, base * 2 ** attempt);
+}
+
+/** 将「南京市」等城市名归一为 API 更稳定的高铁站名 */
+export function normalizeRailStationName(cityOrStation: string): string {
+  const trimmed = cityOrStation.trim().replace(/市$/u, "");
+  if (!trimmed) return cityOrStation.trim();
+  return CITY_TO_RAIL_STATION[trimmed] ?? trimmed;
+}
+
+function isGatewayOrTimeoutError(message: string): boolean {
+  return /HTTP\s+(429|502|503|504)|超时|timeout|abort|econnreset|etimedout|fetch failed|network/i.test(
+    message
+  );
 }
 
 function railApiHost(): string {
@@ -157,7 +226,7 @@ function parseJisuBody(body: unknown): { rows: JisuTrainRow[]; status?: number; 
   return { rows: [], status: o.status, msg: o.msg };
 }
 
-async function fetchRailApi(
+async function fetchRailApiOnce(
   path: string,
   query: Record<string, string>,
   appCode: string
@@ -190,7 +259,9 @@ async function fetchRailApi(
       typeof body === "object" && body && "msg" in body
         ? String((body as { msg?: unknown }).msg ?? "")
         : text.slice(0, 120);
-    throw new Error(`阿里云铁路查询 HTTP ${res.status}${msg ? `：${msg}` : ""}`);
+    const err = new Error(`阿里云铁路查询 HTTP ${res.status}${msg ? `：${msg}` : ""}`);
+    (err as Error & { httpStatus?: number }).httpStatus = res.status;
+    throw err;
   }
 
   const parsed = parseJisuBody(body);
@@ -198,6 +269,32 @@ async function fetchRailApi(
     throw new Error(parsed.msg?.trim() || `阿里云铁路查询失败（status=${parsed.status}）`);
   }
   return { ...parsed, apiPath: path };
+}
+
+async function fetchRailApi(
+  path: string,
+  query: Record<string, string>,
+  appCode: string
+): Promise<{ rows: JisuTrainRow[]; status?: number; msg?: string; apiPath: string }> {
+  const maxRetries = railHttpMaxRetries();
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await fetchRailApiOnce(path, query, appCode);
+    } catch (e) {
+      lastError = e;
+      const message = e instanceof Error ? e.message : String(e);
+      const httpStatus = (e as Error & { httpStatus?: number }).httpStatus;
+      const retryable =
+        isGatewayOrTimeoutError(message) ||
+        (httpStatus != null && RETRYABLE_HTTP_STATUSES.has(httpStatus));
+      if (!retryable || attempt >= maxRetries) break;
+      await sleep(retryBackoffMs(attempt));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 /** 缺少 AppCode 时抛出，供工具层转换为 ToolResult */
@@ -217,8 +314,8 @@ export function requireAliyunRailAppCode(): string {
  */
 export async function queryAliyunRailTrains(input: AliyunRailQueryInput): Promise<AliyunRailQueryResult> {
   const appCode = requireAliyunRailAppCode();
-  const start = input.start.trim();
-  const end = input.end.trim();
+  const start = normalizeRailStationName(input.start);
+  const end = normalizeRailStationName(input.end);
   const queryDate = resolveRailQueryDate(input.dateIso);
   const host = railApiHost();
 
@@ -230,7 +327,26 @@ export async function queryAliyunRailTrains(input: AliyunRailQueryInput): Promis
   if (input.isHighSpeed) baseQuery.ishigh = "1";
 
   let apiPath = railTicketPath();
-  let fetched = await fetchRailApi(apiPath, baseQuery, appCode);
+  let fetched: { rows: JisuTrainRow[]; status?: number; msg?: string; apiPath: string };
+  let taskNotePrefix = "";
+
+  try {
+    fetched = await fetchRailApi(apiPath, baseQuery, appCode);
+  } catch (ticketError) {
+    const ticketMsg = ticketError instanceof Error ? ticketError.message : String(ticketError);
+    if (!isGatewayOrTimeoutError(ticketMsg)) throw ticketError;
+
+    const fallbackPath = railStation2sPath();
+    const fallbackQuery: Record<string, string> = { start, end };
+    if (input.isHighSpeed) fallbackQuery.ishigh = "1";
+    try {
+      fetched = await fetchRailApi(fallbackPath, fallbackQuery, appCode);
+      apiPath = fallbackPath;
+      taskNotePrefix = "余票接口暂不可用，已改读站站时刻参考；";
+    } catch {
+      throw ticketError;
+    }
+  }
 
   if (fetched.rows.length === 0 && !input.dateIso?.trim()) {
     const fallbackPath = railStation2sPath();
@@ -264,7 +380,32 @@ export async function queryAliyunRailTrains(input: AliyunRailQueryInput): Promis
     rawStatus: fetched.status,
     taskNote:
       trains.length > 0
-        ? `共返回 ${trains.length} 条车次（最多展示 ${MAX_TRAINS} 条）。`
-        : "未查询到车次，请确认站名为中文车站名（如「南京南」「上海虹桥」）并核对乘车日期。",
+        ? `${taskNotePrefix}共返回 ${trains.length} 条车次（最多展示 ${MAX_TRAINS} 条）。`
+        : `${taskNotePrefix}未查询到车次，请确认站名为中文车站名（如「南京南」「上海虹桥」）并核对乘车日期。`,
+  };
+}
+
+/** 铁路 API 完全不可用时的降级载荷（避免 ReAct 反复重试同一参数） */
+export function buildDegradedRailToolData(input: {
+  originCity: string;
+  destinationCity: string;
+  dateIso?: string;
+  reason: string;
+}): Record<string, unknown> {
+  const queryDate = resolveRailQueryDate(input.dateIso);
+  return {
+    provider: "aliyun_market_cmapi033685",
+    originCity: input.originCity.trim(),
+    destinationCity: input.destinationCity.trim(),
+    dateIso: queryDate,
+    queryDate,
+    start: normalizeRailStationName(input.originCity),
+    end: normalizeRailStationName(input.destinationCity),
+    total: 0,
+    trains: [],
+    degraded: true,
+    apiUnavailable: true,
+    note: `铁路查询接口暂时不可用（${input.reason}）。后续行程将基于常见高铁参考车次推演，购票与时刻请以 12306 为准。`,
+    doNotRetrySameArgs: true,
   };
 }

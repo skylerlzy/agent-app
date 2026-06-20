@@ -45,7 +45,7 @@ function SectionCard({
       )}
     >
       <div className={cn("pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-90", accent.stripe)} />
-      <h3 className={cn("mb-2.5 flex items-center gap-2 text-base font-bold", accent.title)}>
+      <h3 className={cn("mb-2.5 flex items-center gap-2 text-lg font-bold", accent.title)}>
         <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-lg bg-background/70", accent.title)}>
           {icon}
         </span>
@@ -134,7 +134,7 @@ export function StructuredTripPlanView({
       : []);
 
   return (
-    <div className={cn("space-y-4 text-[15px] leading-relaxed", className)}>
+    <div className={cn("space-y-4 text-base leading-relaxed sm:text-[17px] sm:leading-7", className)}>
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-voyage-sky/10 to-voyage-amber/8 p-5 shadow-md">
         {isUpdating ? (
           <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-background/80 px-2 py-1 text-[10px] text-primary">
@@ -143,9 +143,9 @@ export function StructuredTripPlanView({
           </div>
         ) : null}
         <p className="text-[10px] font-semibold uppercase tracking-widest text-primary/80">全程出行方案</p>
-        <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">{route}</h2>
-        {dateLabel ? <p className="mt-1 text-base text-muted-foreground">{dateLabel}</p> : null}
-        <p className="mt-3 text-base leading-relaxed text-foreground/90">{plan.overview}</p>
+        <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{route}</h2>
+        {dateLabel ? <p className="mt-1 text-base text-muted-foreground sm:text-lg">{dateLabel}</p> : null}
+        <p className="mt-3 text-base leading-relaxed text-foreground/90 sm:text-lg sm:leading-8">{plan.overview}</p>
         {plan.citations && plan.citations.length > 0 ? (
           <div className="mt-3 rounded-lg border border-violet-500/15 bg-violet-500/5 px-2.5 py-2 text-xs text-violet-900">
             {plan.citations.map((c) => (

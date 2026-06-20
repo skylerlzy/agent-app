@@ -9,12 +9,13 @@ import type {
   IToolRegistry,
   ReasoningEvent,
 } from "../contracts";
-import { buildRunDoneTravelOutput, type ToolLogEntry } from "./finalTravelSummary";
+import { buildRunDoneTravelOutput, preferDeterministicFinalize, shouldSkipNarrativePolish, type ToolLogEntry } from "./finalTravelSummary";
 import { buildRunModeEventPayload } from "./runModeDecision";
 import { agentDebug } from "../debugLog";
 import { SessionEmitter } from "../runtime/SessionEmitter";
 import { ensurePlanMatchesDestination } from "../plan/planDestinationPreflight";
 import { ensureEssentialPlanSteps } from "../plan/ensureEssentialPlanSteps";
+import { planDraftIsExecutionReady } from "../plan/planReadiness";
 import { supplementTripToolLogs } from "../tripPlan/supplementTripToolLogs";
 
 function flattenSteps(plan: ExecutionPlan) {
@@ -108,14 +109,19 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     await push(draftEvent);
 
     const skipRevise =
-      process.env.SKIP_PLAN_REVISION === "1" || process.env.SKIP_PLAN_REVISION === "true";
+      process.env.SKIP_PLAN_REVISION === "1" ||
+      process.env.SKIP_PLAN_REVISION === "true" ||
+      planDraftIsExecutionReady(plan, input);
     if (skipRevise) {
-      agentDebug("[agent] SKIP_PLAN_REVISION=1: skip revisePlan (one fewer LLM call)");
+      const reason = planDraftIsExecutionReady(plan, input)
+        ? "初稿结构已满足执行要求（含天气/POI/餐饮/铁路等步骤），跳过计划修订。"
+        : "已按环境变量 SKIP_PLAN_REVISION 跳过计划修订，直接使用初稿。";
+      agentDebug(`[agent] skip revisePlan: ${reason}`);
       const note = emitter.emit({
         type: "reflexion",
         payload: {
           stepId: "__plan_revision__",
-          diagnosis: "已按环境变量 SKIP_PLAN_REVISION 跳过计划修订，直接使用初稿。",
+          diagnosis: reason,
           nextAction: "skip",
         },
       });
@@ -203,7 +209,27 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
     }
 
     let finalToolLogs = toolLogs;
-    if (this.toolRegistry) {
+    const useDeterministicFinalize = preferDeterministicFinalize(toolLogs);
+
+    const shouldSupplementFood =
+      !useDeterministicFinalize &&
+      this.toolRegistry &&
+      (process.env.FORCE_FOOD_SUPPLEMENT === "1" || process.env.FORCE_FOOD_SUPPLEMENT === "true");
+
+    if (shouldSupplementFood && this.toolRegistry) {
+      const supplementThought = emitter.emit({
+        type: "react_thought",
+        payload: {
+          turnIndex: 0,
+          thought: "全部步骤已完成，正在校验餐饮 POI 是否充足…",
+          toolName: null,
+          toolArguments: null,
+          toolResultSummary: "",
+        },
+      });
+      yield supplementThought;
+      await push(supplementThought);
+
       const supplemented = await supplementTripToolLogs(this.toolRegistry, input, toolLogs);
       finalToolLogs = supplemented.logs;
       if (supplemented.supplemented.length > 0) {
@@ -212,6 +238,23 @@ export class PlanExecuteOrchestrator implements IAutonomousAgent {
         );
       }
     }
+
+    const summaryThought = emitter.emit({
+      type: "react_thought",
+      payload: {
+        turnIndex: 0,
+        thought: useDeterministicFinalize
+          ? shouldSkipNarrativePolish()
+            ? "正在根据工具观测组装结构化行程…"
+            : "正在组装行程骨架并由 LLM 润色文案（限时单次润色）…"
+          : "正在根据工具观测生成结构化行程方案…",
+        toolName: null,
+        toolArguments: null,
+        toolResultSummary: "",
+      },
+    });
+    yield summaryThought;
+    await push(summaryThought);
 
     const travelOutput = await buildRunDoneTravelOutput(this.summaryLlm, input, plan, finalToolLogs);
 

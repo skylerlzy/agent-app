@@ -6,7 +6,11 @@ import { z } from "zod";
 import { fetchWithTimeout } from "../http/fetchWithTimeout";
 import type { ToolContext, ToolDefinition, ToolResult } from "../contracts";
 import { TOOL_LLM_DESCRIPTIONS } from "./descriptions";
-import { queryAliyunRailTrains, requireAliyunRailAppCode } from "./aliyunRailClient";
+import {
+  buildDegradedRailToolData,
+  queryAliyunRailTrains,
+  requireAliyunRailAppCode,
+} from "./aliyunRailClient";
 import { inferCityFromText } from "./ToolArgumentValidator";
 
 function toolHttpTimeoutMs(): number {
@@ -1076,11 +1080,15 @@ export const railScheduleHintTool: ToolDefinition<
     } catch (e) {
       const message = e instanceof Error ? e.message : "阿里云铁路查询失败";
       return {
-        ok: false,
-        error: {
-          code: "RAIL_API_ERROR",
-          message,
-          retryable: true,
+        ok: true,
+        data: {
+          ...buildDegradedRailToolData({
+            originCity: origin,
+            destinationCity: dest,
+            dateIso: args.dateIso,
+            reason: message,
+          }),
+          disclaimer: RAIL_DISCLAIMER,
         },
       };
     }

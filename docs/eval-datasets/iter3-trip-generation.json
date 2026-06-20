@@ -1,0 +1,82 @@
+{
+  "version": "iter3-trip-gen-v1",
+  "description": "行程结构化输出质量优化用例（交通兜底、主题天数、餐饮 POI、Skill 生效）",
+  "cases": [
+    {
+      "id": "TG-01",
+      "goal": "帮我安排吧 南京",
+      "preferences": {
+        "originCity": "珠海",
+        "destination": "南京",
+        "tripStartDateIso": "2026-06-24",
+        "tripEndDateIso": "2026-06-26",
+        "travelParty": "couple"
+      },
+      "activeSkillIds": ["builtin:couple-romantic-travel"],
+      "expectations": [
+        "transportSegments 或 transport 含跨城铁路参考；API 失败时须含样例车次并标注样例/12306",
+        "themeHighlights 数量等于 3（与出行天数一致）",
+        "foodRecommendations 至少 3 条真实店名（来自 poi_search，非纯模板）",
+        "存在 skillMoments 或总结中体现情侣浪漫时段/留白",
+        "中山陵等景点 briefDescription 不得与玄武湖模板雷同"
+      ],
+      "metrics": ["factuality", "completeness", "manual_rubric"]
+    },
+    {
+      "id": "TG-02",
+      "goal": "规划北京 3 日游，慢节奏",
+      "preferences": {
+        "destination": "北京",
+        "tripStartDateIso": "2026-07-01",
+        "tripEndDateIso": "2026-07-03",
+        "pace": "slow"
+      },
+      "expectations": [
+        "itinerary 每天主景点不重复",
+        "themeHighlights.length === 3",
+        "dailyWeather 日期在 tripStart～tripEnd 内"
+      ]
+    },
+    {
+      "id": "TG-03",
+      "goal": "规划南京 2 日游，第二天上午想去中山陵",
+      "expectations": [
+        "trace 含 poi_search",
+        "topPlacesToVisit 含中山陵相关主 POI（非子门/停车场）"
+      ]
+    },
+    {
+      "id": "TG-04",
+      "goal": "帮我规划上海 2 日亲子游，孩子 6 岁",
+      "preferences": {
+        "destination": "上海",
+        "tripStartDateIso": "2026-08-01",
+        "tripEndDateIso": "2026-08-02",
+        "travelParty": "family",
+        "pace": "slow"
+      },
+      "activeSkillIds": ["builtin:family-slow-travel"],
+      "expectations": [
+        "体现 family-slow-travel Skill 或亲子友好节奏",
+        "themeHighlights.length === 2",
+        "每日安排含休息留白"
+      ]
+    },
+    {
+      "id": "TG-05",
+      "goal": "从广州去成都玩 4 天，帮我规划",
+      "preferences": {
+        "originCity": "广州",
+        "destination": "成都",
+        "tripStartDateIso": "2026-09-10",
+        "tripEndDateIso": "2026-09-13",
+        "pace": "balanced"
+      },
+      "expectations": [
+        "transport 含广州→成都跨城参考",
+        "itinerary 覆盖 4 天",
+        "themeHighlights.length === 4"
+      ]
+    }
+  ]
+}

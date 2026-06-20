@@ -29,3 +29,5 @@ export const runModeValidator = v.optional(
 );
 
 export const activeSkillIdsValidator = v.optional(v.array(v.string()));
+
+export const enabledToolNamesValidator = v.optional(v.array(v.string()));

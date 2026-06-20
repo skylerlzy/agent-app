@@ -63,14 +63,14 @@ export function TripPlanThemesSection({
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className={cn("text-base font-bold tracking-tight", accent.title)}>{theme.title}</h4>
-                <p className="mt-1.5 text-sm leading-relaxed text-foreground/88">{theme.description}</p>
+                <h4 className={cn("text-lg font-bold tracking-tight sm:text-xl", accent.title)}>{theme.title}</h4>
+                <p className="mt-2 text-base leading-relaxed text-foreground/88 sm:text-[17px] sm:leading-7">{theme.description}</p>
                 {theme.highlights && theme.highlights.length > 0 ? (
                   <ul className="mt-2.5 space-y-2">
                     {theme.highlights.map((h) => (
                       <li
                         key={h}
-                        className="rounded-lg border border-border/40 bg-muted/20 px-2.5 py-2 text-sm leading-relaxed text-foreground/90"
+                        className="rounded-lg border border-border/40 bg-muted/20 px-2.5 py-2 text-base leading-relaxed text-foreground/90"
                       >
                         {h}
                       </li>

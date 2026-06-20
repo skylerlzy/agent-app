@@ -11,8 +11,11 @@ import {
   buildTransportBundleFromToolLogs,
   buildWeatherAdviceFromToolLogs,
   buildWeatherAdviceItemsFromToolLogs,
+  countTripDays,
   ensureFoodRecommendations,
+  extractFoodFromPoiSearch,
   extractPlacesFromToolLogs,
+  extractRestaurantsFromAllPoiLogs,
   parseDailyWeatherFromToolLogs,
 } from "../tripPlan/buildFromToolLogs";
 import { enrichTripPlanWithToolData } from "../tripPlan/enrichTripPlan";
@@ -30,6 +33,90 @@ import {
 import { extractJsonObject } from "./runModeDecision";
 
 export type { ToolLogEntry };
+
+const TOOL_LOG_SUMMARY_MAX_CHARS = 1_400;
+
+function truncateToolLogSummary(summary: string, maxChars = TOOL_LOG_SUMMARY_MAX_CHARS): string {
+  const trimmed = summary.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars)}…（已截断）`;
+}
+
+function isStructuredPlanRecoverableFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /abort|超时|timeout|限流|429|rate|ECONNRESET|ETIMEDOUT|network|fetch failed|中止/i.test(
+    message
+  );
+}
+
+function forceStructuredTravelPlan(): boolean {
+  return process.env.FORCE_STRUCTURED_TRAVEL_PLAN === "1" || process.env.FORCE_STRUCTURED_TRAVEL_PLAN === "true";
+}
+
+function shouldSkipNarrativePolish(): boolean {
+  return process.env.SKIP_TRIP_NARRATIVE_POLISH === "1" || process.env.SKIP_TRIP_NARRATIVE_POLISH === "true";
+}
+
+export { shouldSkipNarrativePolish };
+
+/** 确定性骨架 + 单次限时润色，跳过重型 synthesize（收尾预算 < 2 分钟） */
+export function preferDeterministicFinalize(toolLogs: ToolLogEntry[]): boolean {
+  if (forceStructuredTravelPlan()) return false;
+  return toolLogs.length > 0;
+}
+
+function countFoodPois(toolLogs: ToolLogEntry[], destination?: string): number {
+  const seen = new Set<string>();
+  for (const item of [
+    ...extractFoodFromPoiSearch(toolLogs, { destination }),
+    ...extractRestaurantsFromAllPoiLogs(toolLogs, { destination }),
+  ]) {
+    if (item.name?.trim()) seen.add(item.name);
+  }
+  return seen.size;
+}
+
+/** 严格快路径（仅当显式关闭默认快路径时用于判断） */
+function hasRichToolLogsForDirectFinalize(
+  toolLogs: ToolLogEntry[],
+  opts: { destination?: string; input?: AgentRunInput }
+): boolean {
+  const ctx = opts.input ? resolveTripContext(opts.input) : undefined;
+  const dest = opts.destination ?? ctx?.destination;
+  const filtered = opts.input ? filterToolLogsForTrip(toolLogs, ctx!) : toolLogs;
+  if (filtered.length === 0) return false;
+
+  const tripStart = ctx?.tripStart;
+  const tripEnd = ctx?.tripEnd;
+  const dayCount = countTripDays(tripStart, tripEnd);
+
+  const weatherLogs = filtered.filter((l) => l.toolName === "weather_forecast");
+  const poiLogs = filtered.filter((l) => l.toolName === "poi_search");
+  const foodCount = countFoodPois(filtered, dest);
+  const places = extractPlacesFromToolLogs(filtered, { destination: dest });
+
+  const hasTripWeather =
+    dayCount <= 1 ? weatherLogs.length >= 1 : weatherLogs.length >= Math.min(dayCount, 2);
+
+  return hasTripWeather && poiLogs.length >= 1 && foodCount >= 1 && places.length >= 1;
+}
+
+/** @deprecated 使用 preferDeterministicFinalize */
+export function hasSufficientToolLogsForDirectFinalize(
+  toolLogs: ToolLogEntry[],
+  input: AgentRunInput
+): boolean {
+  return preferDeterministicFinalize(toolLogs) || hasRichToolLogsForDirectFinalize(toolLogs, { input });
+}
+
+function formatToolLogsForPrompt(toolLogs: ToolLogEntry[]): string {
+  if (toolLogs.length === 0) {
+    return "（本回合无成功工具 JSON。请仅依据用户目标与偏好给出原则性建议，并明确写出「未查询到实时天气/路线数据」。）";
+  }
+  return toolLogs
+    .map((t) => `--- ${t.stepId} / ${t.toolName} ---\n${truncateToolLogSummary(t.summary)}`)
+    .join("\n\n");
+}
 
 function buildFallbackTripPlan(
   input: AgentRunInput,
@@ -173,10 +260,10 @@ export async function synthesizeStructuredTravelPlan(
 
   const toolsBlock =
     filteredLogs.length > 0
-      ? filteredLogs.map((t) => `--- ${t.stepId} / ${t.toolName} ---\n${t.summary}`).join("\n\n")
+      ? formatToolLogsForPrompt(filteredLogs)
       : toolLogs.length > 0
         ? "（本回合工具观测与目的地/日期不匹配，已忽略；请仅依据用户目标与 RAG 给出原则性建议，并明确写出「未查询到与目的地匹配的天气/铁路/POI 数据」。）"
-        : "（本回合无成功工具 JSON。请仅依据用户目标与偏好给出原则性建议，并明确写出「未查询到实时天气/路线数据」。）";
+        : formatToolLogsForPrompt([]);
 
   const dest = ctx.destination ?? input.context.preferences.destination ?? "目的地";
   const system = appendSkillSection(
@@ -220,6 +307,9 @@ export async function synthesizeStructuredTravelPlan(
   try {
     return await requestStructuredPlan(llm, baseMessages, "run_structured_travel_plan");
   } catch (firstError) {
+    if (isStructuredPlanRecoverableFailure(firstError)) {
+      throw firstError;
+    }
     const retryMessages = [
       ...baseMessages,
       {
@@ -243,10 +333,16 @@ export async function buildRunDoneTravelOutput(
   toolLogs: ToolLogEntry[]
 ): Promise<RunDoneTravelOutput> {
   const citations = formatCitations(input.contextBundle?.ragChunks ?? []);
+  const useDeterministic = preferDeterministicFinalize(toolLogs);
+  const narrativeMode = useDeterministic ? ("fast" as const) : ("full" as const);
+
   const finalizePlan = async (tripPlan: TripPlanDocument): Promise<TripPlanDocument> => {
     let enriched = enrichTripPlanWithToolData(tripPlan, toolLogs, input);
-    if (llm) {
-      enriched = await enrichTripPlanNarrativesWithLlm(llm, enriched, toolLogs, input);
+    if (llm && !shouldSkipNarrativePolish()) {
+      enriched = await enrichTripPlanNarrativesWithLlm(llm, enriched, toolLogs, input, {
+        mode: narrativeMode,
+        forcePolish: useDeterministic,
+      });
       enriched = enrichTripPlanWithToolData(enriched, toolLogs, input, { narrativeLocked: true });
     }
     return enriched;
@@ -264,6 +360,10 @@ export async function buildRunDoneTravelOutput(
   };
 
   if (!llm) return fallback();
+
+  if (useDeterministic) {
+    return fallback();
+  }
 
   try {
     const result = await synthesizeStructuredTravelPlan(llm, input, plan, toolLogs);

@@ -1,6 +1,9 @@
 {
+  "version": "iter3-rag-v1",
   "name": "iter3-rag-cross-memory",
+  "description": "跨对话记忆与 RAG 出处标注（含需手工前置 setup 的用例）",
   "owner": "member-2",
+  "automation": "manual",
   "cases": [
     {
       "id": "memory-cross-dialogue-spicy",

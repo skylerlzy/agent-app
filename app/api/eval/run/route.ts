@@ -179,6 +179,12 @@ export async function POST(req: NextRequest) {
       goalRaw,
       slots: (b.slots as object | undefined) ?? undefined,
       preferences: (b.preferences as object | undefined) ?? undefined,
+      activeSkillIds: Array.isArray(b.activeSkillIds)
+        ? (b.activeSkillIds as unknown[]).filter((x): x is string => typeof x === "string")
+        : undefined,
+      enabledToolNames: Array.isArray(b.enabledToolNames)
+        ? (b.enabledToolNames as unknown[]).filter((x): x is string => typeof x === "string")
+        : undefined,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {

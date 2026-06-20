@@ -1,0 +1,41 @@
+{
+  "version": "iter3-runmode-v1",
+  "description": "成员5 架构优化：runMode 路由与 trace 特征验收",
+  "cases": [
+    {
+      "id": "RM-01",
+      "input": "规划南京 3 日游，预算 3000",
+      "hasExistingPlan": false,
+      "expectRunMode": "full_plan_execute",
+      "expectTrace": ["plan_draft", "tool_call", "run_done"]
+    },
+    {
+      "id": "RM-02",
+      "input": "第二天改成慢节奏，少 2 个景点",
+      "hasExistingPlan": true,
+      "expectRunMode": "incremental_revise",
+      "forbidTrace": ["plan_draft"]
+    },
+    {
+      "id": "RM-03",
+      "input": "预算降到 2000",
+      "hasExistingPlan": true,
+      "expectRunMode": "incremental_revise"
+    },
+    {
+      "id": "RM-04",
+      "input": "南京天气怎么样",
+      "hasExistingPlan": false,
+      "expectRunMode": "quick_reply",
+      "maxToolCalls": 1,
+      "allowedTools": ["weather_forecast"]
+    },
+    {
+      "id": "RM-05",
+      "input": "帮我复述一下 Day2 的安排",
+      "hasExistingPlan": true,
+      "expectRunMode": "quick_reply",
+      "forbidTrace": ["plan_draft"]
+    }
+  ]
+}

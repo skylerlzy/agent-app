@@ -53,6 +53,7 @@ import { SkillRegistry, resolveSkillSystemSection } from "../lib/agent/skills/Sk
 import { inferCityFromText } from "../lib/agent/tools/ToolArgumentValidator";
 import {
   activeSkillIdsValidator,
+  enabledToolNamesValidator,
   runModeValidator,
   runPreferencesValidator,
 } from "./runValidators";
@@ -847,6 +848,7 @@ export const runAgentEval = action({
     slots: runSlotsValidator,
     preferences: runPreferencesValidator,
     activeSkillIds: activeSkillIdsValidator,
+    enabledToolNames: enabledToolNamesValidator,
   },
   handler: async (ctx, args) => {
     if (convexEvalPublicMode()) {

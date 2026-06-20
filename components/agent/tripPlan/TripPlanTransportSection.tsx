@@ -49,22 +49,22 @@ function RailOptionCard({ option }: { option: TripPlanRailOption }) {
         {option.tag ? (
           <span
             className={cn(
-              "inline-flex rounded-md border px-1.5 py-0.5 text-xs font-semibold",
+              "inline-flex rounded-md border px-2 py-0.5 text-sm font-semibold",
               tagClass(option.tag)
             )}
           >
             {option.tag}
           </span>
         ) : null}
-        <span className="text-base font-bold tabular-nums text-foreground">
+        <span className="text-lg font-bold tabular-nums text-foreground sm:text-xl">
           {option.trainNo}
           {option.trainType ? (
-            <span className="ml-1 text-sm font-medium text-muted-foreground">{option.trainType}</span>
+            <span className="ml-1 text-base font-medium text-muted-foreground">{option.trainType}</span>
           ) : null}
         </span>
-        <span className="text-sm tabular-nums text-primary/90">{option.duration}</span>
+        <span className="text-base tabular-nums text-primary/90">{option.duration}</span>
       </div>
-      <p className="mt-1.5 text-sm leading-relaxed text-foreground/90">
+      <p className="mt-2 text-base leading-relaxed text-foreground/90 sm:text-[17px]">
         <span className="font-medium tabular-nums">{option.departureTime}</span>
         <span className="mx-1 text-muted-foreground">·</span>
         {option.departStation}
@@ -74,7 +74,7 @@ function RailOptionCard({ option }: { option: TripPlanRailOption }) {
         {option.arriveStation}
       </p>
       {(price || option.seatsAvailable) && (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
           {[price, option.seatsAvailable?.split("；")[0]].filter(Boolean).join(" · ")}
         </p>
       )}
@@ -111,13 +111,13 @@ export function TripPlanTransportSection({
                   <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">{label}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-base font-bold text-foreground">
+                  <p className="text-lg font-bold text-foreground sm:text-xl">
                     {seg.origin}
                     <span className="mx-1.5 font-normal text-muted-foreground">→</span>
                     {seg.destination}
                   </p>
                   {(seg.queryDateIso || seg.totalTrains != null || seg.durationMinutes != null) && (
-                    <p className="mt-0.5 text-sm tabular-nums text-primary/90">
+                    <p className="mt-1 text-base tabular-nums text-primary/90">
                       {seg.queryDateIso ? `${seg.queryDateIso} 出行` : null}
                       {seg.queryDateIso && seg.totalTrains != null ? " · " : null}
                       {seg.totalTrains != null ? `共 ${seg.totalTrains} 趟可选` : null}
@@ -131,8 +131,8 @@ export function TripPlanTransportSection({
                       {seg.railOptions.map((opt) => (
                         <RailOptionCard key={`${opt.trainNo}-${opt.tag}`} option={opt} />
                       ))}
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        数据来自第三方铁路接口，购票、改签请以 12306 为准；到站后地铁或网约车接驳至酒店。
+                      <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+                        购票、改签请以 12306 为准；到站后地铁或网约车接驳至酒店。
                       </p>
                     </div>
                   ) : (
